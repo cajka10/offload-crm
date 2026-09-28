@@ -1,0 +1,17 @@
+@page "/status/{Code:int}"
+@attribute [AllowAnonymous]
+
+@* Target of UseStatusCodePagesWithReExecute for non-API requests (unknown routes, /customers/abc, ...). *@
+@if (Code == 404)
+{
+    <NotFoundContent />
+}
+else
+{
+    <NotFoundContent Title="@T("Something went wrong")" Message="@T("The request could not be completed (HTTP {0}).", Code)" />
+}
+
+@code {
+    [Parameter]
+    public int Code { get; set; }
+}

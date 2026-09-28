@@ -1,0 +1,483 @@
+@page "/customers/{Id:int}"
+@inject ICustomerService CustomerService
+@inject IContactService ContactService
+@inject IProjectService ProjectService
+@using Offload.Crm.Web.Components.Pages.Activities
+@using Offload.Crm.Web.Components.Pages.Projects
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject ListLocations ListLocations
+@inject ILogger<CustomerDetailPage> Logger
+
+<PageTitle>@(_customer?.CompanyName ?? T("Customer")) · Offload CRM</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="px-0 pt-0" />
+
+@if (_loading)
+{
+    <MudPaper Class="pa-4" Outlined="true" Elevation="0" data-testid="loading">
+        <MudSkeleton Width="40%" Height="48px" />
+        <MudSkeleton Width="25%" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="220px" Class="mt-4" />
+    </MudPaper>
+}
+else if (_notFound)
+{
+    <NotFoundContent Title="@T("Customer not found")"
+                     Message="@T("Customer #{0} doesn't exist or has been deleted.", Id)"
+                     BackHref="/customers" BackText="@T("Back to customers")" />
+}
+else if (_loadError || _customer is null)
+{
+    <MudAlert Severity="Severity.Error" data-testid="load-error">
+        @T("The customer could not be loaded.")
+        <MudLink OnClick="LoadAsync" Typo="Typo.body2">@T("Try again")</MudLink>
+    </MudAlert>
+}
+else
+{
+    var c = _customer;
+    <MudPaper Class="pa-4 mb-4" Outlined="true" Elevation="0">
+        <div class="d-flex flex-wrap align-center gap-3">
+            <div class="flex-grow-1" style="min-width: 0;">
+                <div class="d-flex align-center flex-wrap gap-2">
+                    <MudText Typo="Typo.h4" HtmlTag="h1" Class="text-break" data-testid="customer-name">@c.CompanyName</MudText>
+                    <CustomerStatusChip Status="c.Status" />
+                </div>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                    @T("IČO"): @Fmt.OrDash(c.RegistrationNo) · @Fmt.OrDash(c.City) ·
+                    @Plural(c.ProjectCount, "{0} project", "{0} projects", "{0} projekt", "{0} projekty", "{0} projektov") ·
+                    @T("Last activity"): @Fmt.DateTimeText(c.LastActivityAt)
+                </MudText>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                @* T-26 quick actions *@
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Work"
+                           OnClick="NewProjectAsync" data-testid="quick-new-project">@T("New project")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.EventNote"
+                           OnClick="LogActivityAsync" data-testid="quick-log-activity">@T("Log activity")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd"
+                           OnClick="AddContactAsync" data-testid="quick-add-contact">@T("Add contact")</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="EditAsync" data-testid="customer-edit">@T("Edit")</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="DeleteAsync" data-testid="customer-delete">@T("Delete")</MudButton>
+            </div>
+        </div>
+        <div class="summary-row mt-3" data-testid="customer-summary">
+            <div class="summary-item"><span class="summary-value" data-testid="summary-projects">@c.ProjectCount</span><span class="summary-label">@T("projects")</span></div>
+            <div class="summary-item"><span class="summary-value" data-testid="summary-active-projects">@c.ActiveProjectCount</span><span class="summary-label">@T("active projects")</span></div>
+            <div class="summary-item"><span class="summary-value" data-testid="summary-open-tasks">@c.OpenTaskCount</span><span class="summary-label">@T("open tasks")</span></div>
+            <div class="summary-item"><span class="summary-value" data-testid="summary-pipeline">@Fmt.Money(c.PipelineValue)</span><span class="summary-label">@T("pipeline (active projects)")</span></div>
+            <div class="summary-item"><span class="summary-value">@Fmt.DateTimeText(c.LastActivityAt)</span><span class="summary-label">@T("last activity")</span></div>
+        </div>
+    </MudPaper>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4"
+             @bind-ActivePanelIndex="_activeTab">
+        <MudTabPanel Text="@T("Overview")" data-testid="tab-overview">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <dl class="detail-list">
+                        <dt>@T("Company name")</dt><dd>@c.CompanyName</dd>
+                        <dt>@T("Registration no. (IČO)")</dt><dd>@Fmt.OrDash(c.RegistrationNo)</dd>
+                        <dt>@T("VAT ID (DIČ)")</dt><dd>@Fmt.OrDash(c.VatId)</dd>
+                        <dt>@T("Status")</dt><dd><CustomerStatusChip Status="c.Status" /></dd>
+                        <dt>@T("E-mail")</dt>
+                        <dd>
+                            @if (c.Email is null) { @Fmt.Empty }
+                            else { <MudLink Href="@($"mailto:{c.Email}")">@c.Email</MudLink> }
+                        </dd>
+                        <dt>@T("Phone")</dt>
+                        <dd>
+                            @if (c.Phone is null) { @Fmt.Empty }
+                            else { <MudLink Href="@($"tel:{c.Phone.Replace(" ", "")}")">@c.Phone</MudLink> }
+                        </dd>
+                        <dt>@T("Website")</dt>
+                        <dd>
+                            @if (c.Website is null) { @Fmt.Empty }
+                            else { <MudLink Href="@c.Website" Target="_blank" rel="noopener noreferrer">@c.Website</MudLink> }
+                        </dd>
+                    </dl>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <dl class="detail-list">
+                        <dt>@T("Street")</dt><dd>@Fmt.OrDash(c.Street)</dd>
+                        <dt>@T("City")</dt><dd>@Fmt.OrDash(c.City)</dd>
+                        <dt>@T("Postal code")</dt><dd>@Fmt.OrDash(c.PostalCode)</dd>
+                        <dt>@T("Country")</dt><dd>@Fmt.OrDash(c.Country)</dd>
+                        <dt>@T("Created")</dt><dd>@Fmt.DateTimeText(c.CreatedAt)</dd>
+                        <dt>@T("Last updated")</dt><dd>@Fmt.DateTimeText(c.UpdatedAt)</dd>
+                        <dt>@T("Last activity")</dt><dd>@Fmt.DateTimeText(c.LastActivityAt)</dd>
+                    </dl>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">@T("Notes")</MudText>
+                    <MudText Typo="Typo.body2" Class="pre-wrap text-break">@Fmt.OrDash(c.Notes)</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="@T("Contacts ({0})", _contacts?.Count ?? c.ContactCount)" data-testid="tab-contacts">
+            <div class="d-flex align-center mb-3">
+                <MudText Typo="Typo.h6">@T("Contacts")</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                           OnClick="AddContactAsync" data-testid="contact-new">@T("Add contact")</MudButton>
+            </div>
+
+            @if (_contactsError)
+            {
+                <MudAlert Severity="Severity.Error">
+                    @T("Contacts could not be loaded.") <MudLink OnClick="LoadContactsAsync" Typo="Typo.body2">@T("Try again")</MudLink>
+                </MudAlert>
+            }
+            else if (_contacts is null)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+            else if (_contacts.Count == 0)
+            {
+                <div class="pa-6 d-flex flex-column align-center" data-testid="contacts-empty">
+                    <MudIcon Icon="@Icons.Material.Filled.Contacts" Size="Size.Large" Class="mb-2 mud-text-secondary" />
+                    <MudText>@T("No contacts yet.")</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="AddContactAsync" Class="mt-2">@T("Add the first contact")</MudButton>
+                </div>
+            }
+            else
+            {
+                <MudTable Items="_contacts" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Xs"
+                          HorizontalScrollbar="true" data-testid="contacts-table">
+                    <HeaderContent>
+                        <MudTh>@T("Name")</MudTh>
+                        <MudTh>@T("Position")</MudTh>
+                        <MudTh>@T("E-mail")</MudTh>
+                        <MudTh>@T("Phone")</MudTh>
+                        <MudTh Style="text-align: right;">@T("Actions")</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="@T("Name")" data-testid="contact-name">@context.FullName</MudTd>
+                        <MudTd DataLabel="@T("Position")">@Fmt.OrDash(context.Position)</MudTd>
+                        <MudTd DataLabel="@T("E-mail")">
+                            @if (context.Email is null) { @Fmt.Empty }
+                            else { <MudLink Href="@($"mailto:{context.Email}")" Typo="Typo.body2">@context.Email</MudLink> }
+                        </MudTd>
+                        <MudTd DataLabel="@T("Phone")" Style="white-space: nowrap;">
+                            @if (context.Phone is null) { @Fmt.Empty }
+                            else { <MudLink Href="@($"tel:{context.Phone.Replace(" ", "")}")" Typo="Typo.body2">@context.Phone</MudLink> }
+                        </MudTd>
+                        <MudTd DataLabel="@T("Actions")" Style="text-align: right; white-space: nowrap;">
+                            <MudTooltip Text="@T("Edit")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit contact")"
+                                               OnClick="() => EditContactAsync(context)" data-testid="contact-edit" />
+                            </MudTooltip>
+                            <MudTooltip Text="@T("Delete")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete contact")"
+                                               OnClick="() => DeleteContactAsync(context)" data-testid="contact-delete" />
+                            </MudTooltip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="@T("Projects ({0})", c.ProjectCount)" data-testid="tab-projects">
+            <div class="d-flex align-center mb-3">
+                <MudText Typo="Typo.h6">@T("Projects")</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="NewProjectAsync" data-testid="customer-project-new">@T("New project")</MudButton>
+            </div>
+            @if (_projects is null)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+            else if (_projects.Count == 0)
+            {
+                <div class="list-state" data-testid="projects-empty">
+                    <MudIcon Icon="@Icons.Material.Filled.Work" Size="Size.Large" Class="mb-2 mud-text-secondary" />
+                    <MudText>@T("This customer has no projects yet.")</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="NewProjectAsync" Class="mt-2">@T("Create the first project")</MudButton>
+                </div>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="list-table" data-testid="customer-projects-table">
+                    <thead>
+                        <tr>
+                            <th>@T("Name")</th>
+                            <th>@T("Status")</th>
+                            <th class="hide-lt-960">@T("Priority")</th>
+                            <th class="hide-lt-600">@T("Target")</th>
+                            <th class="hide-lt-1280" style="text-align: right;">@T("Est. value")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _projects)
+                        {
+                            <tr @key="p.Id">
+                                <td><MudLink Href="@($"/projects/{p.Id}")" Typo="Typo.body2" Class="clamp-2" data-testid="customer-project-link">@p.Name</MudLink></td>
+                                <td><ProjectStatusChip Name="@p.StatusName" Color="@p.StatusColor" /></td>
+                                <td class="hide-lt-960"><PriorityChip Priority="p.Priority" /></td>
+                                <td class="hide-lt-600 col-nowrap">@Fmt.Date(p.TargetDate)</td>
+                                <td class="hide-lt-1280 col-nowrap" style="text-align: right;">@Fmt.Money(p.EstimatedValue)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                @if (_projectTotal > _projects.Count)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @T("Showing {0} of {1}.", _projects.Count, _projectTotal) <MudLink Href="@($"/projects?customer={Id}&active=false")" Typo="Typo.caption">@T("Show all")</MudLink>
+                    </MudText>
+                }
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="@T("Activities")" data-testid="tab-activities">
+            <ActivityFeed @ref="_feed" CustomerId="c.Id" OnChanged="RefreshCustomerAsync" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private CustomerDetail? _customer;
+    private IReadOnlyList<ContactDto>? _contacts;
+    private IReadOnlyList<ProjectListItem>? _projects;
+    private ActivityFeed? _feed;
+    private int _projectTotal;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _loadError;
+    private bool _contactsError;
+    private int _activeTab;
+    private List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _activeTab = 0;
+        _contacts = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _loadError = false;
+        try
+        {
+            _customer = await CustomerService.GetAsync(Id);
+            UpdateBreadcrumbs();
+            await LoadContactsAsync();
+            await LoadProjectsAsync();
+        }
+        catch (NotFoundException)
+        {
+            _customer = null;
+            _notFound = true;
+            UpdateBreadcrumbs();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading customer {Id} failed", Id);
+            _loadError = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadContactsAsync()
+    {
+        _contactsError = false;
+        try
+        {
+            _contacts = await ContactService.ListByCustomerAsync(Id);
+        }
+        catch (Exception ex) when (ex is not NotFoundException)
+        {
+            Logger.LogError(ex, "Loading contacts of customer {Id} failed", Id);
+            _contactsError = true;
+        }
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        var result = await ProjectService.ListAsync(new ProjectListQuery
+        {
+            CustomerId = Id,
+            ActiveOnly = false,
+            Sort = ProjectSort.Status,
+            PageSize = PagedQuery.MaxPageSize,
+        });
+        _projects = result.Items;
+        _projectTotal = result.TotalCount;
+    }
+
+    private async Task LogActivityAsync()
+    {
+        var parameters = new DialogParameters<ActivityEditDialog> { { x => x.CustomerId, Id } };
+        var dialog = await DialogService.ShowAsync<ActivityEditDialog>("New activity", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await RefreshCustomerAsync();
+            if (_feed is not null)
+            {
+                await _feed.LoadAsync();
+            }
+        }
+    }
+
+    private async Task NewProjectAsync()
+    {
+        var parameters = new DialogParameters<ProjectEditDialog>
+        {
+            { x => x.CustomerId, Id },
+            { x => x.LockCustomer, true },
+        };
+        var dialog = await DialogService.ShowAsync<ProjectEditDialog>("New project", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadProjectsAsync();
+            await RefreshCustomerAsync();
+        }
+    }
+
+    private async Task RefreshCustomerAsync()
+    {
+        try
+        {
+            _customer = await CustomerService.GetAsync(Id);
+            UpdateBreadcrumbs();
+        }
+        catch (NotFoundException)
+        {
+            _notFound = true;
+        }
+    }
+
+    private void UpdateBreadcrumbs() => _breadcrumbs =
+    [
+        new BreadcrumbItem(T("Customers"), href: ListLocations.For("/customers")),
+        new BreadcrumbItem(_customer?.CompanyName ?? $"#{Id}", href: null, disabled: true),
+    ];
+
+    private async Task EditAsync()
+    {
+        if (_customer is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<CustomerEditDialog>
+        {
+            { x => x.CustomerId, _customer.Id },
+            { x => x.Initial, CustomerInput.From(_customer) },
+        };
+        var dialog = await DialogService.ShowAsync<CustomerEditDialog>("Edit customer", parameters, DialogExtensions.FormOptions());
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: CustomerDetail updated })
+        {
+            _customer = updated;
+            UpdateBreadcrumbs();
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_customer is null)
+        {
+            return;
+        }
+
+        var confirmed = await DialogService.ConfirmDeleteAsync(
+            "Delete customer",
+            $"Delete \"{_customer.CompanyName}\"? Its contacts and activities will be deleted too. This cannot be undone.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await CustomerService.DeleteAsync(_customer.Id);
+            Snackbar.Add($"Customer \"{_customer.CompanyName}\" deleted.", Severity.Success);
+            Navigation.NavigateTo("/customers");
+        }
+        catch (ConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This customer was already deleted.", Severity.Info);
+            Navigation.NavigateTo("/customers");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Deleting customer {Id} failed", Id);
+            Snackbar.Add("Deleting failed. Please try again.", Severity.Error);
+        }
+    }
+
+    private async Task AddContactAsync()
+    {
+        var parameters = new DialogParameters<ContactEditDialog> { { x => x.CustomerId, Id } };
+        var dialog = await DialogService.ShowAsync<ContactEditDialog>("New contact", parameters, DialogExtensions.FormOptions(MaxWidth.Small));
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadContactsAsync();
+            await RefreshCustomerAsync();
+        }
+    }
+
+    private async Task EditContactAsync(ContactDto contact)
+    {
+        var parameters = new DialogParameters<ContactEditDialog>
+        {
+            { x => x.CustomerId, Id },
+            { x => x.ContactId, contact.Id },
+            { x => x.Initial, ContactInput.From(contact) },
+        };
+        var dialog = await DialogService.ShowAsync<ContactEditDialog>("Edit contact", parameters, DialogExtensions.FormOptions(MaxWidth.Small));
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadContactsAsync();
+        }
+    }
+
+    private async Task DeleteContactAsync(ContactDto contact)
+    {
+        var confirmed = await DialogService.ConfirmDeleteAsync("Delete contact", $"Delete contact \"{contact.FullName}\"? This cannot be undone.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await ContactService.DeleteAsync(contact.Id);
+            Snackbar.Add($"Contact \"{contact.FullName}\" deleted.", Severity.Success);
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This contact was already deleted.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Deleting contact {Id} failed", contact.Id);
+            Snackbar.Add("Deleting failed. Please try again.", Severity.Error);
+        }
+
+        await LoadContactsAsync();
+        await RefreshCustomerAsync();
+    }
+}

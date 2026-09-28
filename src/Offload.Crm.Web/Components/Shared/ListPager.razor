@@ -1,0 +1,61 @@
+@* Server-side pager (D-20.2). Class names mirror MudTable's pager so styling/tests stay consistent. *@
+<div class="mud-table-pagination list-pager" data-testid="pager">
+    <div class="mud-table-pagination-toolbar list-pager-toolbar">
+        <span class="mud-table-pagination-caption list-pager-caption hide-lt-600">@T("Rows per page"):</span>
+        <select class="list-pager-size" value="@PageSize" aria-label="@T("Rows per page")" data-testid="pager-size"
+                @onchange="OnSizeChanged">
+            @foreach (var size in ListState.PageSizes)
+            {
+                <option value="@size">@size</option>
+            }
+        </select>
+        <span class="mud-table-pagination-caption list-pager-caption" data-testid="pager-info">@Info</span>
+        <div class="mud-table-pagination-actions">
+            <MudIconButton Icon="@Icons.Material.Filled.FirstPage" Size="Size.Small" Disabled="@(Page <= 1)" aria-label="@T("First page")"
+                           OnClick="() => OnPageChanged.InvokeAsync(1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.NavigateBefore" Size="Size.Small" Disabled="@(Page <= 1)" aria-label="@T("Previous page")"
+                           OnClick="() => OnPageChanged.InvokeAsync(Page - 1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.NavigateNext" Size="Size.Small" Disabled="@(Page >= LastPage)" aria-label="@T("Next page")"
+                           OnClick="() => OnPageChanged.InvokeAsync(Page + 1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.LastPage" Size="Size.Small" Disabled="@(Page >= LastPage)" aria-label="@T("Last page")"
+                           OnClick="() => OnPageChanged.InvokeAsync(LastPage)" />
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int Page { get; set; } = 1;
+
+    [Parameter]
+    public int PageSize { get; set; } = 25;
+
+    [Parameter]
+    public int TotalCount { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnPageChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    private int LastPage => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)Math.Max(1, PageSize)));
+
+    private string Info
+    {
+        get
+        {
+            if (TotalCount == 0)
+            {
+                return T("0 of 0");
+            }
+
+            var first = ((long)Page - 1) * PageSize + 1;
+            var last = Math.Min((long)Page * PageSize, TotalCount);
+            return T("{0}–{1} of {2}", first, last, TotalCount);
+        }
+    }
+
+    private Task OnSizeChanged(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var size) ? OnPageSizeChanged.InvokeAsync(size) : Task.CompletedTask;
+}

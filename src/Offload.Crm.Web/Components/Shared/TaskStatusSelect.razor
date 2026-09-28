@@ -1,0 +1,16 @@
+@* Compact inline task status changer (T-16/T-17). *@
+<MudSelect T="TaskItemStatus" Value="Status" ValueChanged="StatusChanged" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+           aria-label="@T("Task status")" data-testid="task-status-select">
+    @foreach (var s in Enum.GetValues<TaskItemStatus>())
+    {
+        <MudSelectItem T="TaskItemStatus" Value="@s">@Labels.Of(s)</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter]
+    public TaskItemStatus Status { get; set; }
+
+    [Parameter]
+    public EventCallback<TaskItemStatus> StatusChanged { get; set; }
+}

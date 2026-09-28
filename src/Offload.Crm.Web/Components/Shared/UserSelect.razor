@@ -1,0 +1,79 @@
+@inject IUserService UserService
+
+@*
+    Picker for responsible/assignee (D-09): lists active users only. An already assigned user who has been
+    deactivated stays selectable as "Name (inactive)" so existing records keep their value.
+*@
+<MudSelect T="string" Label="@T(Label)" Value="Value" ValueChanged="ValueChanged" Clearable="true"
+           Error="@(ErrorText is not null)" ErrorText="@ErrorText" Variant="@Variant" Margin="@Margin"
+           Class="@Class" Style="@Style" data-testid="@TestId">
+    @if (ExtraOptions is not null)
+    {
+        @ExtraOptions
+    }
+    @foreach (var user in _users)
+    {
+        <MudSelectItem T="string" Value="@user.Id">@user.DisplayName</MudSelectItem>
+    }
+    @if (IsUnknownValue)
+    {
+        @* BUG-021: a deep-linked user id that doesn't exist is shown (and can be cleared). *@
+        <MudSelectItem T="string" Value="@Value">@T("Unknown user")</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>The value the record had when the form opened (kept even if that user is inactive now).</summary>
+    [Parameter]
+    public string? OriginalValue { get; set; }
+
+    /// <summary>Filters show everyone (incl. inactive); pickers don't.</summary>
+    [Parameter]
+    public bool IncludeInactive { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "User";
+
+    [Parameter]
+    public string? ErrorText { get; set; }
+
+    [Parameter]
+    public RenderFragment? ExtraOptions { get; set; }
+
+    /// <summary>Values provided by <see cref="ExtraOptions"/> (e.g. "me", "unassigned").</summary>
+    [Parameter]
+    public IReadOnlyCollection<string> ExtraValues { get; set; } = [];
+
+    [Parameter]
+    public Variant Variant { get; set; } = Variant.Text;
+
+    [Parameter]
+    public Margin Margin { get; set; } = Margin.None;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? Style { get; set; }
+
+    [Parameter]
+    public string TestId { get; set; } = "user-select";
+
+    private IReadOnlyList<UserDto> _users = [];
+    private bool _loaded;
+
+    private bool IsUnknownValue => _loaded && Value is not null && !ExtraValues.Contains(Value) && _users.All(u => u.Id != Value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await UserService.ListAsync(includeInactive: true);
+        _users = all.Where(u => u.IsActive || IncludeInactive || u.Id == OriginalValue).ToList();
+        _loaded = true;
+    }
+}

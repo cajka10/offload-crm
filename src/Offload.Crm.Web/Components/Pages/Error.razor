@@ -1,0 +1,18 @@
+@page "/Error"
+@attribute [AllowAnonymous]
+@using System.Diagnostics
+
+<PageTitle>@T("Error") · Offload CRM</PageTitle>
+
+<NotFoundContent Title="@T("Something went wrong")"
+                 Message="@(RequestId is null ? T("An unexpected error occurred. It has been logged.") : T("An unexpected error occurred. It has been logged (request {0}).", RequestId))" />
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

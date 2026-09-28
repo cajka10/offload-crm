@@ -1,0 +1,82 @@
+@implements IDisposable
+
+@*
+    Put inside an EditForm instead of DataAnnotationsValidator. It validates exactly like the services do
+    (D-19, BUG-010): the model is normalised first (trim, empty -> null, https:// prefix), then its DataAnnotations
+    (incl. IValidatableObject) are checked. Service-side errors (e.g. duplicate IČO) are shown with Show().
+*@
+
+@code {
+    [CascadingParameter]
+    private EditContext? CurrentEditContext { get; set; }
+
+    private ValidationMessageStore? _store;
+
+    protected override void OnInitialized()
+    {
+        if (CurrentEditContext is null)
+        {
+            throw new InvalidOperationException($"{nameof(FormValidator)} must be placed inside an EditForm.");
+        }
+
+        _store = new ValidationMessageStore(CurrentEditContext);
+        CurrentEditContext.OnValidationRequested += OnValidationRequested;
+        CurrentEditContext.OnFieldChanged += OnFieldChanged;
+    }
+
+    /// <summary>Shows errors keyed by model property name (from an <see cref="AppValidationException"/>).</summary>
+    public void Show(IReadOnlyDictionary<string, string[]> errors)
+    {
+        if (CurrentEditContext is null || _store is null)
+        {
+            return;
+        }
+
+        _store.Clear();
+        foreach (var (field, messages) in errors)
+        {
+            _store.Add(CurrentEditContext.Field(field), messages.Select(m => T(m))); // D-29
+        }
+
+        CurrentEditContext.NotifyValidationStateChanged();
+    }
+
+    private Dictionary<string, string[]> ValidateModel()
+    {
+        var model = CurrentEditContext!.Model;
+        (model as INormalizable)?.Normalize();
+        return ModelValidator.Validate(model);
+    }
+
+    private void OnValidationRequested(object? sender, ValidationRequestedEventArgs e)
+    {
+        _store!.Clear();
+        foreach (var (field, messages) in ValidateModel())
+        {
+            _store.Add(CurrentEditContext!.Field(field), messages.Select(m => T(m)));
+        }
+
+        CurrentEditContext!.NotifyValidationStateChanged();
+    }
+
+    private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        var field = e.FieldIdentifier;
+        _store!.Clear(field);
+        if (ValidateModel().TryGetValue(field.FieldName, out var messages))
+        {
+            _store.Add(field, messages.Select(m => T(m)));
+        }
+
+        CurrentEditContext!.NotifyValidationStateChanged();
+    }
+
+    public void Dispose()
+    {
+        if (CurrentEditContext is not null)
+        {
+            CurrentEditContext.OnValidationRequested -= OnValidationRequested;
+            CurrentEditContext.OnFieldChanged -= OnFieldChanged;
+        }
+    }
+}

@@ -1,0 +1,144 @@
+@inject IUserAdminService Users
+@inject ISnackbar Snackbar
+@inject ILogger<UserEditDialog> Logger
+
+<MudDialog data-testid="user-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New user" : "Edit user")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="user-form" Model="_model" OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true" novalidate>
+            <FormValidator @ref="_validator" />
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">@T("Please fix the highlighted fields.")</MudAlert>
+            }
+            <MudGrid Spacing="2">
+                @if (!IsNew)
+                {
+                    <MudItem xs="12">
+                        <MudTextField Label="@T("Full name")" Required="true" @bind-Value="_update.FullName" For="@(() => _update.FullName)" Counter="100"
+                                      AutoFocus="true" data-testid="user-fullName" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField Label="@T("E-mail (login)")" Required="true" InputType="InputType.Email" @bind-Value="_update.Email"
+                                      For="@(() => _update.Email)" Counter="256" data-testid="user-email" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool" @bind-Value="_update.IsAdmin" Label="@T("Administrator")" Color="Color.Primary"
+                                     Disabled="@(Existing!.IsCurrentUser && Existing.IsAdmin)" data-testid="user-isAdmin" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                            @T(Existing!.IsCurrentUser && Existing.IsAdmin
+                                ? "You can't remove the administrator role from your own account."
+                                : AdminHint)
+                        </MudText>
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudTextField Label="@T("Full name")" Required="true" @bind-Value="_create.FullName" For="@(() => _create.FullName)" Counter="100"
+                                      AutoFocus="true" data-testid="user-fullName" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField Label="@T("E-mail (login)")" Required="true" InputType="InputType.Email" @bind-Value="_create.Email"
+                                      For="@(() => _create.Email)" Counter="256" data-testid="user-email" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField Label="@T("Password")" Required="true" InputType="InputType.Password" @bind-Value="_create.Password"
+                                      For="@(() => _create.Password)" HelperText="@T("At least 8 characters, a digit and an uppercase letter")"
+                                      data-testid="user-password" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField Label="@T("Confirm password")" Required="true" InputType="InputType.Password" @bind-Value="_create.ConfirmPassword"
+                                      For="@(() => _create.ConfirmPassword)" data-testid="user-confirmPassword" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool" @bind-Value="_create.IsAdmin" Label="@T("Administrator")" Color="Color.Primary" data-testid="user-isAdmin" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@T(AdminHint)</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="user-form" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                   data-testid="dialog-save">@T("Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Null for a new user.</summary>
+    [Parameter]
+    public UserListItem? Existing { get; set; }
+
+    private readonly UserCreateInput _create = new();
+    private UserUpdateInput _update = new();
+    private object _model = default!;
+    private FormValidator? _validator;
+    private bool _saving;
+    private bool _showSummary;
+
+    private bool IsNew => Existing is null;
+
+    private const string AdminHint = "Administrators can manage users, project statuses and the database switch.";
+
+    protected override void OnInitialized()
+    {
+        _update = new UserUpdateInput { FullName = Existing?.FullName, Email = Existing?.Email, IsAdmin = Existing?.IsAdmin ?? false };
+        _model = IsNew ? _create : _update;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew
+                ? await Users.CreateAsync(_create)
+                : await Users.UpdateAsync(Existing!.Id, _update);
+            Snackbar.Add(IsNew ? $"User \"{saved.FullName}\" created." : "User saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _validator?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (ConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This user no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (ForbiddenException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving user failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

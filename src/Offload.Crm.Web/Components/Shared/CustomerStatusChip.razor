@@ -1,0 +1,8 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@AppTheme.StatusColor(Status)" Class="ma-0" data-testid="customer-status">
+    @Labels.Of(Status)
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public CustomerStatus Status { get; set; }
+}

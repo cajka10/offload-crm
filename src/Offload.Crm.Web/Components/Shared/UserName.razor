@@ -1,0 +1,24 @@
+@* A user's name; deactivated users are marked "(inactive)" (D-07/D-09). *@
+@if (Name is null)
+{
+    <span class="mud-text-secondary">@(EmptyText ?? Fmt.Empty)</span>
+}
+else if (IsActive)
+{
+    <span class="person-name">@Name</span>
+}
+else
+{
+    <span class="mud-text-secondary person-name">@Name @T("(inactive)")</span>
+}
+
+@code {
+    [Parameter]
+    public string? Name { get; set; }
+
+    [Parameter]
+    public bool IsActive { get; set; } = true;
+
+    [Parameter]
+    public string? EmptyText { get; set; }
+}

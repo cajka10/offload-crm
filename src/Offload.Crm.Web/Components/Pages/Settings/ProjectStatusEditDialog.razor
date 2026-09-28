@@ -1,0 +1,127 @@
+@inject IProjectStatusService StatusService
+@inject ISnackbar Snackbar
+@inject ILogger<ProjectStatusEditDialog> Logger
+
+<MudDialog data-testid="status-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New project status" : "Edit project status")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="status-form" EditContext="_editContext" OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true" novalidate>
+            <FormValidator @ref="_validator" />
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">@T("Please fix the highlighted fields.")</MudAlert>
+            }
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Name")" Required="true" @bind-Value="_model.Name" For="@(() => _model.Name)" Counter="50"
+                                  AutoFocus="true" data-testid="status-name" />
+                </MudItem>
+                <MudItem xs="12">
+                    <div class="d-flex align-center gap-3">
+                        <span class="color-swatch" style="@($"width: 36px; height: 36px; background: {SafeColor};")" data-testid="status-color-preview"></span>
+                        <MudTextField Label="@T("Color (hex)")" @bind-Value="_model.Color" For="@(() => _model.Color)" Placeholder="#0F5132"
+                                      Class="flex-grow-1" data-testid="status-color" />
+                    </div>
+                    <div class="d-flex flex-wrap gap-1 mt-2" aria-label="@T("Preset colors")">
+                        @foreach (var preset in Presets)
+                        {
+                            <button type="button" class="color-swatch" style="@($"background: {preset}; cursor: pointer;")" title="@preset"
+                                    aria-label="@T("Use color {0}", preset)" @onclick="() => _model.Color = preset"></button>
+                        }
+                    </div>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudCheckBox T="bool" @bind-Value="_model.IsActive" Label="@T("Counts as active")" Color="Color.Primary" data-testid="status-active" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudCheckBox T="bool" @bind-Value="_model.IsClosed" Label="@T("Closed (terminal)")" Color="Color.Primary" data-testid="status-closed" />
+                    <ValidationMessage For="@(() => _model.IsClosed)" class="mud-input-helper-text mud-input-error" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudCheckBox T="bool" @bind-Value="_model.IsDefault" Label="@T("Default for new projects")" Color="Color.Primary"
+                                 Disabled="_wasDefault" data-testid="status-default" />
+                    <ValidationMessage For="@(() => _model.IsDefault)" class="mud-input-helper-text mud-input-error" />
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="status-form" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                   data-testid="dialog-save">@T("Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly string[] Presets =
+        ["#6C757D", "#0DCAF0", "#6F42C1", "#0D6EFD", "#E8912D", "#0F5132", "#20C997", "#DC3545", "#FFC107", "#795548"];
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public ProjectStatusDto? Existing { get; set; }
+
+    private ProjectStatusInput _model = new();
+    private EditContext _editContext = default!;
+    private FormValidator? _validator;
+    private bool _saving;
+    private bool _showSummary;
+    private bool _wasDefault;
+
+    private bool IsNew => Existing is null;
+
+    private string SafeColor => _model.Color is { Length: 7 } c && c[0] == '#' ? c : "transparent";
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _model = ProjectStatusInput.From(Existing);
+            _wasDefault = Existing.IsDefault;
+        }
+
+        _editContext = new EditContext(_model);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew ? await StatusService.CreateAsync(_model) : await StatusService.UpdateAsync(Existing!.Id, _model);
+            Snackbar.Add(IsNew ? $"Status \"{saved.Name}\" created." : "Status saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _validator?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This status no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving project status failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

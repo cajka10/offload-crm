@@ -1,0 +1,11 @@
+@* Uses the configurable status color (D-02). *@
+<MudChip T="string" Size="Size.Small" Class="ma-0" Style="@($"background-color: {Color}; color: {Labels.TextOn(Color)};")"
+         data-testid="project-status-chip">@Name</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Color { get; set; } = "#6C757D";
+}

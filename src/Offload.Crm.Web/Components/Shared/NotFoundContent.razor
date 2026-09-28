@@ -1,0 +1,24 @@
+<PageTitle>@T("Not found") · Offload CRM</PageTitle>
+
+<MudPaper Class="pa-8 d-flex flex-column align-center text-center" Elevation="0" Outlined="true" data-testid="not-found">
+    <MudIcon Icon="@Icons.Material.Filled.SearchOff" Color="Color.Secondary" Style="font-size: 4rem;" Class="mb-4" />
+    <MudText Typo="Typo.h5" HtmlTag="h1">@T(Title)</MudText>
+    <MudText Typo="Typo.body1" Class="mud-text-secondary mb-4">@T(Message)</MudText>
+    <MudButton Href="@BackHref" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack">
+        @T(BackText)
+    </MudButton>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Page not found";
+
+    [Parameter]
+    public string Message { get; set; } = "The page you are looking for doesn't exist or has been moved.";
+
+    [Parameter]
+    public string BackHref { get; set; } = "/";
+
+    [Parameter]
+    public string BackText { get; set; } = "Go to dashboard";
+}

@@ -1,0 +1,6 @@
+<MudChip T="string" Size="Size.Small" Style="@Labels.PriorityStyle(Priority)" Class="ma-0" data-testid="priority-chip">@Labels.Of(Priority)</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public Priority Priority { get; set; }
+}

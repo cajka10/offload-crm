@@ -1,0 +1,233 @@
+@page "/activities"
+@inherits ListPageBase<ActivityDto>
+@inject IActivityService ActivityService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ILogger<ActivityListPage> Logger
+
+<PageTitle>@T("Activities") · Offload CRM</PageTitle>
+
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@T("Activities")</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync"
+               data-testid="activity-new">@T("New activity")</MudButton>
+</div>
+
+<MudPaper Class="pa-3 mb-3" Outlined="true" Elevation="0">
+    <div class="d-flex flex-wrap gap-3 align-center">
+        <MudTextField T="string" Value="@SearchText" ValueChanged="SetSearch" Placeholder="@T("Search subject or description…")" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" DebounceInterval="350" Immediate="true"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Style="min-width: 200px;" data-testid="activity-search" />
+        <MudSelect T="ActivityType?" Label="@T("Type")" Value="@_type" ValueChanged="@(v => SetFilter(TypeKey, v?.ToString()))"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px; max-width: 180px;" data-testid="activity-type-filter">
+            <MudSelectItem T="ActivityType?" Value="@((ActivityType?)null)">@T("All types")</MudSelectItem>
+            @foreach (var t in Enum.GetValues<ActivityType>())
+            {
+                <MudSelectItem T="ActivityType?" Value="@((ActivityType?)t)">@Labels.Of(t)</MudSelectItem>
+            }
+        </MudSelect>
+        <CustomerPicker Value="@_customerId" ValueChanged="@(v => SetFilter(CustomerKey, v?.ToString()))" Label="@T("Customer")"
+                        Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 190px; max-width: 250px;" TestId="activity-customer-filter" />
+        <ProjectPicker Value="@_projectId" ValueChanged="@(v => SetFilter(ProjectKey, v?.ToString()))" Label="@T("Project")" CustomerId="@_customerId"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 190px; max-width: 250px;" TestId="activity-project-filter" />
+        <UserSelect Value="@_authorId" ValueChanged="@(v => SetFilter(AuthorKey, v))" Label="@T("Author")" IncludeInactive="true"
+                    Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 160px; max-width: 210px;" TestId="activity-author-filter" />
+        <MudDateRangePicker Label="@T("Date range")" DateRange="_range" DateRangeChanged="OnRangeChanged" DateFormat="dd.MM.yyyy" Clearable="true"
+                            Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 220px; max-width: 260px;" data-testid="activity-date-filter" />
+    </div>
+</MudPaper>
+
+<MudPaper Outlined="true" Elevation="0" Class="list-table" data-testid="activity-table">
+    @if (Loading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" data-testid="loading" />
+    }
+
+    @if (Items.Count == 0 && !Loading)
+    {
+        <ListStateView LoadError="LoadError" IsEmptyDatabase="IsEmptyDatabase" Icon="@Icons.Material.Filled.EventNote"
+                       EmptyText="@T("No activities yet.")" NoResultsText="@T("No activities match your filters.")"
+                       CreateText="@T("New activity")" OnCreate="CreateAsync" OnClearFilters="ClearFilters" OnRetry="ReloadAsync" />
+    }
+    else if (Items.Count > 0)
+    {
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+            <thead>
+                <tr>
+                    <SortHeader Label="@T("Date")" Key="@ActivitySort.Date" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                    <SortHeader Label="@T("Type")" Key="@ActivitySort.Type" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-960" />
+                    <th>@T("Activity")</th>
+                    <SortHeader Label="@T("Customer")" Key="@ActivitySort.Customer" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1280" />
+                    <SortHeader Label="@T("Project")" Key="@ActivitySort.Project" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                    <SortHeader Label="@T("Author")" Key="@ActivitySort.Author" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1280" />
+                    <th class="col-actions">@T("Actions")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in Items)
+                {
+                    <tr @key="a.Id" data-testid="activity-row">
+                        <td class="col-nowrap">@Fmt.DateTimeText(a.Date)</td>
+                        <td class="hide-lt-960 col-nowrap">
+                            <MudIcon Icon="@Labels.ActivityIcon(a.Type)" Size="Size.Small" Class="mr-1" Style="vertical-align: middle;" />@Labels.Of(a.Type)
+                        </td>
+                        <td>
+                            <MudLink Typo="Typo.body2" OnClick="() => EditAsync(a)" Class="clamp-2" title="@Generated(a.Description)" data-testid="activity-link">
+                                @if (a.Subject is not null)
+                                {
+                                    <strong>@Generated(a.Subject): </strong>
+                                }
+                                @Generated(a.Description)
+                            </MudLink>
+                        </td>
+                        <td class="hide-lt-1280">
+                            @if (a.CustomerId is { } cid)
+                            {
+                                <MudLink Href="@($"/customers/{cid}")" Typo="Typo.body2" Class="clamp-2">@a.CustomerName</MudLink>
+                            }
+                            else
+                            {
+                                @Fmt.Empty
+                            }
+                        </td>
+                        <td class="hide-lt-1440">
+                            @if (a.ProjectId is { } pid)
+                            {
+                                <MudLink Href="@($"/projects/{pid}")" Typo="Typo.body2" Class="clamp-2">@a.ProjectName</MudLink>
+                            }
+                            else
+                            {
+                                @Fmt.Empty
+                            }
+                        </td>
+                        <td class="hide-lt-1280">@a.AuthorName</td>
+                        <td class="col-actions">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit activity")" OnClick="() => EditAsync(a)" data-testid="activity-edit" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete activity")"
+                                           OnClick="() => DeleteAsync(a)" data-testid="activity-delete" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+
+    <ListPager Page="State.Page" PageSize="State.PageSize" TotalCount="TotalCount" OnPageChanged="GoToPage" OnPageSizeChanged="SetPageSize" />
+</MudPaper>
+
+@code {
+    private const string TypeKey = "type";
+    private const string CustomerKey = "customer";
+    private const string ProjectKey = "project";
+    private const string AuthorKey = "author";
+    private const string FromKey = "from";
+    private const string ToKey = "to";
+
+    private ActivityType? _type;
+    private int? _customerId;
+    private int? _projectId;
+    private string? _authorId;
+    private DateRange? _range;
+
+    protected override IEnumerable<string> FilterKeys => [TypeKey, CustomerKey, ProjectKey, AuthorKey, FromKey, ToKey];
+
+    protected override string DefaultSort => ActivitySort.Date;
+
+    protected override bool DefaultDescending => true; // newest first (T-19)
+
+    protected override void OnStateLoaded()
+    {
+        _type = Enum.TryParse<ActivityType>(State.Filter(TypeKey), true, out var t) && Enum.IsDefined(t) ? t : null;
+        _customerId = State.IntFilter(CustomerKey);
+        _projectId = State.IntFilter(ProjectKey);
+        _authorId = State.Filter(AuthorKey);
+        var from = ParseDate(State.Filter(FromKey));
+        var to = ParseDate(State.Filter(ToKey));
+        _range = from is null && to is null ? null : new DateRange(from?.ToDateTime(TimeOnly.MinValue), to?.ToDateTime(TimeOnly.MinValue));
+    }
+
+    protected override Task<PagedResult<ActivityDto>> FetchAsync(ListState state, CancellationToken ct) =>
+        ActivityService.ListAsync(
+            new ActivityListQuery
+            {
+                Search = state.Search,
+                Type = _type,
+                CustomerId = _customerId,
+                ProjectId = _projectId,
+                AuthorId = _authorId,
+                From = ParseDate(state.Filter(FromKey)),
+                To = ParseDate(state.Filter(ToKey)),
+                Sort = EffectiveSort,
+                Descending = EffectiveDescending,
+                Page = state.Page,
+                PageSize = state.PageSize,
+            },
+            ct);
+
+    protected override async Task<bool> IsDatabaseEmptyAsync(CancellationToken ct) =>
+        (await ActivityService.ListAsync(new ActivityListQuery { PageSize = 1 }, ct)).TotalCount == 0;
+
+    private static DateOnly? ParseDate(string? value) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+
+    private void OnRangeChanged(DateRange? range) => Change(s =>
+    {
+        s.Filters[FromKey] = range?.Start?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        s.Filters[ToKey] = range?.End?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        s.Page = 1;
+    });
+
+    private async Task CreateAsync()
+    {
+        var parameters = new DialogParameters<ActivityEditDialog>
+        {
+            { x => x.CustomerId, _customerId },
+            { x => x.ProjectId, _projectId },
+        };
+        var dialog = await DialogService.ShowAsync<ActivityEditDialog>("New activity", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await ReloadAsync();
+        }
+    }
+
+    private async Task EditAsync(ActivityDto activity)
+    {
+        var parameters = new DialogParameters<ActivityEditDialog> { { x => x.Existing, activity } };
+        var dialog = await DialogService.ShowAsync<ActivityEditDialog>("Edit activity", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await ReloadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(ActivityDto activity)
+    {
+        if (!await DialogService.ConfirmDeleteAsync("Delete activity", $"Delete the activity from {Fmt.DateTimeText(activity.Date)}? This cannot be undone."))
+        {
+            return;
+        }
+
+        try
+        {
+            await ActivityService.DeleteAsync(activity.Id);
+            Snackbar.Add("Activity deleted.", Severity.Success);
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This activity was already deleted.", Severity.Info);
+        }
+        catch (SessionExpiredException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Deleting activity failed");
+            Snackbar.Add("Deleting failed. Please try again.", Severity.Error);
+        }
+
+        await ReloadAsync();
+    }
+}

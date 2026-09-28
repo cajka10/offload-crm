@@ -1,0 +1,38 @@
+@* Sortable column header (D-20.3). The active column shows an arrow; clicking toggles the direction. *@
+<th class="@Class" style="@(Align == "right" ? "text-align: right;" : null)" aria-sort="@AriaSort">
+    <button type="button" class="sort-header @(IsActive ? "sort-header-active" : null)" @onclick="() => OnSort.InvokeAsync(Key)"
+            data-testid="@($"sort-{Key}")">
+        <span>@T(Label)</span>
+        @if (IsActive)
+        {
+            <MudIcon Icon="@(Descending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)" Size="Size.Small" />
+        }
+    </button>
+</th>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Key { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? CurrentSort { get; set; }
+
+    [Parameter]
+    public bool Descending { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSort { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? Align { get; set; }
+
+    private bool IsActive => string.Equals(CurrentSort, Key, StringComparison.OrdinalIgnoreCase);
+
+    private string AriaSort => !IsActive ? "none" : Descending ? "descending" : "ascending";
+}

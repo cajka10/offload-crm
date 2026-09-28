@@ -1,0 +1,11 @@
+<MudAlert Severity="Severity.Error" Dense="true" Class="@Class" data-testid="widget-error">
+    @T("This could not be loaded.") <MudLink OnClick="OnRetry" Typo="Typo.body2">@T("Retry")</MudLink>
+</MudAlert>
+
+@code {
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+}

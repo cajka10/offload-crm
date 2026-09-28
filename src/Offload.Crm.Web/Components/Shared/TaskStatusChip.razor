@@ -1,0 +1,6 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@Labels.TaskStatusColor(Status)" Class="ma-0" data-testid="task-status-chip">@Labels.Of(Status)</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskItemStatus Status { get; set; }
+}

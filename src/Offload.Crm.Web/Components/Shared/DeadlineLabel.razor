@@ -1,0 +1,18 @@
+@* "Overdue" (red), "Today" (orange) or "in N days" (D-23). *@
+@if (Days < 0)
+{
+    <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ma-0" data-testid="deadline-label">@T("Overdue")</MudChip>
+}
+else if (Days == 0)
+{
+    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ma-0" data-testid="deadline-label">@T("Today")</MudChip>
+}
+else
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="deadline-label">@Plural(Days, "in {0} day", "in {0} days", "o {0} deň", "o {0} dni", "o {0} dní")</MudText>
+}
+
+@code {
+    [Parameter]
+    public int Days { get; set; }
+}

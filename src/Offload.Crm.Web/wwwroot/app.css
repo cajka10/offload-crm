@@ -1,0 +1,558 @@
+/* Offload CRM — global styles. Brand: primary #0F5132, secondary #E8912D (D-15). */
+:root {
+  --brand-primary: #0F5132;
+  --brand-secondary: #E8912D;
+}
+
+h1:focus {
+  outline: none;
+}
+
+.brand {
+  color: inherit;
+}
+
+.pre-wrap {
+  white-space: pre-wrap;
+}
+
+.text-break {
+  overflow-wrap: anywhere;
+}
+
+/* Label/value list used on detail pages */
+.detail-list {
+  display: grid;
+  grid-template-columns: minmax(140px, 35%) 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.detail-list dt {
+  color: var(--mud-palette-text-secondary);
+  font-size: 0.875rem;
+}
+
+.detail-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Static SSR account pages (login/logout) */
+.account-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #0F5132 0%, #1B7A4F 60%, #E8912D 140%);
+  font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.account-card {
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.account-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--brand-primary);
+  margin-bottom: 16px;
+}
+
+.account-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.account-title {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin: 0 0 16px;
+}
+
+.account-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+
+.account-field label {
+  font-size: 0.875rem;
+  margin-bottom: 4px;
+  color: #444;
+}
+
+.account-field input {
+  padding: 10px 12px;
+  border: 1px solid #c4c4c4;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.account-field input:focus {
+  outline: 2px solid var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.account-field input.invalid {
+  border-color: #c62828;
+}
+
+.account-field-error,
+.account-field .validation-message {
+  color: #c62828;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.account-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.account-submit {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 4px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.account-submit:hover {
+  background: #0b3d26;
+}
+
+.account-alert {
+  background: #fdecea;
+  color: #8a1c1c;
+  border: 1px solid #f5c2c0;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* Blazor reconnect/unhandled error bar */
+#blazor-error-ui {
+  background: #fff4e5;
+  bottom: 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+  display: none;
+  left: 0;
+  padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+  position: fixed;
+  width: 100%;
+  z-index: 2000;
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+}
+
+.account-info {
+  background: #e8f4ec;
+  color: #0b3d26;
+  border: 1px solid #b7dcc4;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.account-text {
+  font-size: 0.9rem;
+  color: #444;
+  margin: 12px 0;
+}
+
+/* ---- D-20.6 / BUG-007: long unbroken text wraps everywhere; the page never scrolls sideways ---- */
+td, .mud-breadcrumbs, .mud-breadcrumb-item, .mud-breadcrumb-item a,
+h1, h2, h3, h4, h5, h6, .mud-typography, .mud-link, .mud-alert-message, .mud-snackbar-content-message {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.mud-breadcrumbs {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.mud-breadcrumb-item {
+  min-width: 0;
+}
+
+.mud-main-content, .mud-container {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Short labels never break mid-word: headers stay on one line, chips ellipsize. */
+th {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.mud-chip {
+  max-width: 100%;
+}
+
+.mud-chip-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
+.person-name {
+  overflow-wrap: break-word;
+}
+
+/* Primary name column: at most 2 lines, full text in the tooltip (D-20.5) */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* ---- D-20.5 / BUG-006: responsive list columns (secondary columns hide on smaller screens) ---- */
+.list-table table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.list-table td, .list-table th {
+  vertical-align: middle;
+}
+
+.col-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.col-nowrap {
+  white-space: nowrap;
+}
+
+@media (max-width: 1439.98px) {
+  .hide-lt-1440 { display: none !important; }
+}
+
+@media (max-width: 1279.98px) {
+  .hide-lt-1280 { display: none !important; }
+}
+
+@media (max-width: 959.98px) {
+  .hide-lt-960 { display: none !important; }
+}
+
+@media (max-width: 599.98px) {
+  .hide-lt-600 { display: none !important; }
+}
+
+/* Sortable header (D-20.3) */
+.sort-header {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  text-align: left;
+}
+
+.sort-header:hover span {
+  text-decoration: underline;
+}
+
+.sort-header-active {
+  color: var(--mud-palette-primary);
+}
+
+/* Pager */
+.list-pager {
+  border-top: 1px solid var(--mud-palette-table-lines);
+}
+
+.list-pager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+}
+
+.list-pager-size {
+  border: 1px solid var(--mud-palette-lines-inputs);
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: transparent;
+  font: inherit;
+}
+
+.list-state {
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.overdue {
+  color: var(--mud-palette-error);
+  font-weight: 500;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+}
+
+/* ---- Kanban (T-18, BUG-018): the 4 columns share the available width, so all of them and every card menu are
+   visible at 1280/1024/768; below 600 px they stack. ---- */
+.kanban-board {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+  max-width: 100%;
+}
+
+.kanban-column {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--mud-palette-background-gray);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-zone {
+  min-height: 120px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kanban-card {
+  cursor: grab;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kanban-card .mud-menu {
+  flex-shrink: 0;
+}
+
+@media (max-width: 599.98px) {
+  .kanban-board {
+    flex-direction: column;
+  }
+}
+
+.timeline-item {
+  border-left: 3px solid var(--mud-palette-lines-default);
+  padding: 4px 0 12px 12px;
+}
+
+/* ---- Dashboard (D-23) ---- */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kpi-card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.kpi-card {
+  height: 100%;
+  transition: box-shadow 0.15s;
+}
+
+.kpi-card-link:hover .kpi-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.kpi-error {
+  grid-column: 1 / -1;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.widget-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--mud-palette-table-lines);
+}
+
+.widget-row:last-child {
+  border-bottom: none;
+}
+
+.widget-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.status-bar-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.status-bar-row:hover .status-bar-label {
+  text-decoration: underline;
+}
+
+.status-bar-label {
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+
+.status-bar-track {
+  background: var(--mud-palette-background-gray);
+  border-radius: 4px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.status-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+
+.status-bar-count {
+  text-align: right;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 1279.98px) {
+  .kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 959.98px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Detail summary (T-26) */
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.summary-value {
+  font-size: 1.15rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.summary-label {
+  font-size: 0.75rem;
+  color: var(--mud-palette-text-secondary);
+}
+
+/* Settings → Database (D-26) */
+.db-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 360px));
+  gap: 16px;
+}
+
+.db-target-active {
+  border-color: var(--brand-primary) !important;
+  border-width: 2px !important;
+}
+
+.db-target-active.db-target-test {
+  border-color: var(--brand-secondary) !important;
+}
+
+.test-db-badge {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* D-29: language links on the account pages */
+.account-languages {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 0.8125rem;
+  margin: -8px 0 8px;
+}
+
+.account-languages a {
+  color: var(--brand-primary);
+}
+
+.account-language-current {
+  font-weight: 600;
+}

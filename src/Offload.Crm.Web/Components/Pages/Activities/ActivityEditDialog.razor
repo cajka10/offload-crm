@@ -1,0 +1,186 @@
+@inject IActivityService ActivityService
+@inject ISnackbar Snackbar
+@inject ILogger<ActivityEditDialog> Logger
+
+<MudDialog data-testid="activity-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New activity" : "Edit activity")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="activity-form" EditContext="_editContext" OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true" novalidate>
+            <FormValidator @ref="_validator" />
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">@T("Please fix the highlighted fields.")</MudAlert>
+            }
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="ActivityType" Label="@T("Type")" @bind-Value="_model.Type" For="@(() => _model.Type)" data-testid="activity-type">
+                        @foreach (var t in Enum.GetValues<ActivityType>())
+                        {
+                            <MudSelectItem T="ActivityType" Value="@t">@Labels.Of(t)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker Label="@T("Date")" Date="_localDate" DateChanged="OnDateChanged" DateFormat="dd.MM.yyyy" Editable="true"
+                                   Error="@(Error(nameof(ActivityInput.Date)) is not null)" ErrorText="@Error(nameof(ActivityInput.Date))"
+                                   data-testid="activity-date" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTimePicker Label="@T("Time")" Time="_localTime" TimeChanged="OnTimeChanged" Editable="true" data-testid="activity-time" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <CustomerPicker Value="_model.CustomerId" ValueChanged="OnCustomerChanged" Disabled="LockContext"
+                                    ErrorText="@Error(nameof(ActivityInput.CustomerId))" TestId="activity-customer" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <ProjectPicker Value="_model.ProjectId" ValueChanged="v => _model.ProjectId = v" Selected="OnProjectSelected"
+                                   CustomerId="_model.CustomerId" Disabled="LockContext"
+                                   ErrorText="@Error(nameof(ActivityInput.ProjectId))" TestId="activity-project" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Subject")" @bind-Value="_model.Subject" For="@(() => _model.Subject)" Counter="200" data-testid="activity-subject" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Description")" Required="true" Lines="4" AutoGrow="true" MaxLines="14" Counter="4000"
+                                  @bind-Value="_model.Description" For="@(() => _model.Description)" data-testid="activity-description" />
+                </MudItem>
+                <MudItem xs="12">
+                    @* D-12: the author is the current user and can't be changed. *@
+                    <MudTextField T="string" Label="@T("Author")" Value="@AuthorName" ReadOnly="true" Disabled="true" data-testid="activity-author" />
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="activity-form" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                   data-testid="dialog-save">@T("Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Parameter]
+    public ActivityDto? Existing { get; set; }
+
+    [Parameter]
+    public int? CustomerId { get; set; }
+
+    [Parameter]
+    public int? ProjectId { get; set; }
+
+    /// <summary>Opened from a customer/project page: the context is pre-filled and fixed.</summary>
+    [Parameter]
+    public bool LockContext { get; set; }
+
+    private ActivityInput _model = new();
+    private EditContext _editContext = default!;
+    private FormValidator? _validator;
+    private DateTime? _localDate;
+    private TimeSpan? _localTime;
+    private string? _currentUserName;
+    private bool _saving;
+    private bool _showSummary;
+
+    private bool IsNew => Existing is null;
+
+    private string AuthorName => Existing?.AuthorName ?? _currentUserName ?? T("You");
+
+    protected override async Task OnInitializedAsync()
+    {
+        _model = Existing is null
+            ? new ActivityInput { CustomerId = CustomerId, ProjectId = ProjectId, Date = DateTime.UtcNow }
+            : ActivityInput.From(Existing);
+        var local = Fmt.ToLocal(_model.Date!.Value);
+        _localDate = local.Date;
+        _localTime = new TimeSpan(local.Hour, local.Minute, 0);
+        _editContext = new EditContext(_model);
+        _editContext.OnValidationStateChanged += (_, _) => StateHasChanged();
+
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _currentUserName = user.FindFirst(Offload.Crm.Web.Auth.AppClaimsPrincipalFactory.FullNameClaim)?.Value ?? user.Identity?.Name;
+        }
+    }
+
+    private string? Error(string field) => _editContext.GetValidationMessages(_editContext.Field(field)).FirstOrDefault();
+
+    private void OnDateChanged(DateTime? date)
+    {
+        _localDate = date;
+        UpdateDate();
+    }
+
+    private void OnTimeChanged(TimeSpan? time)
+    {
+        _localTime = time;
+        UpdateDate();
+    }
+
+    private void UpdateDate()
+    {
+        _model.Date = _localDate is null ? null : AppTime.LocalToUtc(_localDate.Value.Date + (_localTime ?? TimeSpan.Zero));
+        _editContext.NotifyFieldChanged(_editContext.Field(nameof(ActivityInput.Date)));
+    }
+
+    private void OnCustomerChanged(int? id)
+    {
+        _model.CustomerId = id;
+        _editContext.NotifyFieldChanged(_editContext.Field(nameof(ActivityInput.CustomerId)));
+    }
+
+    private void OnProjectSelected(ProjectLookupItem? project)
+    {
+        if (project is not null)
+        {
+            _model.CustomerId = project.CustomerId; // D-12: the project implies its customer
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew ? await ActivityService.CreateAsync(_model) : await ActivityService.UpdateAsync(Existing!.Id, _model);
+            Snackbar.Add(IsNew ? "Activity added." : "Activity saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _validator?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This activity no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving activity failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

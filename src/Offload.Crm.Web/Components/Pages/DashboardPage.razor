@@ -1,0 +1,278 @@
+@page "/"
+@using Offload.Crm.Application.Dashboard
+@inject IDashboardService Dashboard
+@inject TimeProvider Clock
+@inject ILogger<DashboardPage> Logger
+
+<PageTitle>@T("Dashboard") · Offload CRM</PageTitle>
+
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@T("Dashboard")</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAllAsync"
+               data-testid="dashboard-refresh">@T("Refresh")</MudButton>
+</div>
+
+@if (IsEmptyDatabase)
+{
+    <MudPaper Class="pa-6 mb-4 d-flex flex-column align-center text-center" Outlined="true" Elevation="0" data-testid="dashboard-welcome">
+        <MudIcon Icon="@Icons.Material.Filled.WavingHand" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
+        <MudText Typo="Typo.h6">@T("Welcome to Offload CRM")</MudText>
+        <MudText Class="mud-text-secondary mb-3">@T("There's no data yet. Start by adding your first customer.")</MudText>
+        <MudButton Href="/customers" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">@T("Add your first customer")</MudButton>
+    </MudPaper>
+}
+
+@* KPI row *@
+<div class="kpi-row mb-4" data-testid="kpis">
+    @if (_kpis.Loading)
+    {
+        @for (var i = 0; i < 5; i++)
+        {
+            <MudPaper Class="pa-4 kpi-card" Outlined="true" Elevation="0"><MudSkeleton Width="60%" /><MudSkeleton Height="40px" /></MudPaper>
+        }
+    }
+    else if (_kpis.Failed || _kpis.Data is null)
+    {
+        <WidgetError OnRetry="_kpis.LoadAsync" Class="kpi-error" />
+    }
+    else
+    {
+        var k = _kpis.Data;
+        <KpiCard Label="@T("Active customers")" Value="@k.ActiveCustomers.ToString()" Href="/customers?status=Active" Icon="@Icons.Material.Filled.Business" TestId="kpi-active-customers" />
+        <KpiCard Label="@T("Active projects")" Value="@k.ActiveProjects.ToString()" Href="/projects" Icon="@Icons.Material.Filled.Work" TestId="kpi-active-projects" />
+        <KpiCard Label="@T("Open tasks")" Value="@k.OpenTasks.ToString()" Href="/tasks" Icon="@Icons.Material.Filled.TaskAlt" TestId="kpi-open-tasks" />
+        <KpiCard Label="@T("Overdue tasks")" Value="@k.OverdueTasks.ToString()" Href="/tasks?overdue=true" Icon="@Icons.Material.Filled.Alarm"
+                 Danger="@(k.OverdueTasks > 0)" TestId="kpi-overdue-tasks" />
+        <KpiCard Label="@T("Pipeline value")" Value="@Fmt.Money(k.PipelineValue)" Href="/projects?sort=estimatedValue&descending=true"
+                 Icon="@Icons.Material.Filled.Payments" TestId="kpi-pipeline" />
+    }
+</div>
+
+<div class="dashboard-grid">
+    <div class="d-flex flex-column gap-4">
+        <MudPaper Class="pa-4" Outlined="true" Elevation="0" data-testid="widget-status">
+            <MudText Typo="Typo.h6" Class="mb-3">@T("Projects by status")</MudText>
+            @if (_statuses.Loading)
+            {
+                <MudSkeleton /><MudSkeleton /><MudSkeleton />
+            }
+            else if (_statuses.Failed || _statuses.Data is null)
+            {
+                <WidgetError OnRetry="_statuses.LoadAsync" />
+            }
+            else if (_statuses.Data.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">@T("No project statuses are configured.")</MudText>
+            }
+            else
+            {
+                var max = Math.Max(1, _statuses.Data.Max(s => s.ProjectCount));
+                @foreach (var s in _statuses.Data)
+                {
+                    @* Click-through with "active only" off, so closed statuses show their projects (D-23). *@
+                    <a class="status-bar-row" href="@($"/projects?status={s.StatusId}&active=false")" data-testid="status-bar">
+                        <span class="status-bar-label">@s.Name</span>
+                        <span class="status-bar-track">
+                            <span class="status-bar-fill" style="@($"width: {s.ProjectCount * 100 / max}%; background: {s.Color};")"></span>
+                        </span>
+                        <span class="status-bar-count" data-testid="status-bar-count">@s.ProjectCount</span>
+                    </a>
+                }
+            }
+        </MudPaper>
+
+        <MudPaper Class="pa-4" Outlined="true" Elevation="0" data-testid="widget-deadlines">
+            <div class="d-flex align-center mb-2">
+                <MudText Typo="Typo.h6">@T("Upcoming deadlines")</MudText>
+                <MudSpacer />
+                <MudLink Href="/tasks?overdue=true" Typo="Typo.body2">@T("View all overdue")</MudLink>
+            </div>
+            @if (_deadlines.Loading)
+            {
+                <MudSkeleton /><MudSkeleton /><MudSkeleton />
+            }
+            else if (_deadlines.Failed || _deadlines.Data is null)
+            {
+                <WidgetError OnRetry="_deadlines.LoadAsync" />
+            }
+            else if (_deadlines.Data.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">@T("Nothing due in the next 14 days.")</MudText>
+            }
+            else
+            {
+                @foreach (var d in _deadlines.Data)
+                {
+                    <div class="widget-row" data-testid="deadline-item">
+                        <MudIcon Icon="@(d.Kind == DeadlineKind.Task ? Icons.Material.Filled.TaskAlt : Icons.Material.Filled.Work)" Size="Size.Small" Class="mud-text-secondary" />
+                        <div class="widget-main">
+                            <MudLink Href="@($"/projects/{d.ProjectId}")" Typo="Typo.body2" Class="clamp-2">@d.Title</MudLink>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block text-break">
+                                @(d.Kind == DeadlineKind.Task ? $"{d.ProjectName} · {d.CustomerName}" : d.CustomerName)@(d.PersonName is null ? "" : " · " + d.PersonName)
+                            </MudText>
+                        </div>
+                        <div class="text-right col-nowrap">
+                            <MudText Typo="Typo.caption" Class="d-block">@Fmt.Date(d.Date)</MudText>
+                            <DeadlineLabel Days="d.DaysFromToday" />
+                        </div>
+                    </div>
+                }
+            }
+        </MudPaper>
+    </div>
+
+    <div class="d-flex flex-column gap-4">
+        <MudPaper Class="pa-4" Outlined="true" Elevation="0" data-testid="widget-my-tasks">
+            <div class="d-flex align-center mb-2">
+                <MudText Typo="Typo.h6">@T("My open tasks")</MudText>
+                <MudSpacer />
+                <MudLink Href="/tasks?assignee=me" Typo="Typo.body2">@T("View all")</MudLink>
+            </div>
+            @if (_myTasks.Loading)
+            {
+                <MudSkeleton /><MudSkeleton /><MudSkeleton />
+            }
+            else if (_myTasks.Failed || _myTasks.Data is null)
+            {
+                <WidgetError OnRetry="_myTasks.LoadAsync" />
+            }
+            else if (_myTasks.Data.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">@T("You have no open tasks.")</MudText>
+            }
+            else
+            {
+                var today = AppTime.Today(Clock);
+                @foreach (var t in _myTasks.Data)
+                {
+                    <div class="widget-row" data-testid="my-task-item">
+                        <div class="widget-main">
+                            <MudLink Href="@($"/projects/{t.ProjectId}")" Typo="Typo.body2" Class="clamp-2">@t.Title</MudLink>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block text-break">@t.ProjectName</MudText>
+                        </div>
+                        <PriorityChip Priority="t.Priority" />
+                        <MudText Typo="Typo.caption" Class="@($"col-nowrap {(t.IsOverdue(today) ? "overdue" : "")}")">@Fmt.Date(t.DueDate)</MudText>
+                    </div>
+                }
+            }
+        </MudPaper>
+
+        <MudPaper Class="pa-4" Outlined="true" Elevation="0" data-testid="widget-activities">
+            <div class="d-flex align-center mb-2">
+                <MudText Typo="Typo.h6">@T("Recent activities")</MudText>
+                <MudSpacer />
+                <MudLink Href="/activities" Typo="Typo.body2">@T("View all")</MudLink>
+            </div>
+            @if (_activities.Loading)
+            {
+                <MudSkeleton /><MudSkeleton /><MudSkeleton />
+            }
+            else if (_activities.Failed || _activities.Data is null)
+            {
+                <WidgetError OnRetry="_activities.LoadAsync" />
+            }
+            else if (_activities.Data.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">@T("No activities yet.")</MudText>
+            }
+            else
+            {
+                @foreach (var a in _activities.Data)
+                {
+                    <div class="widget-row" data-testid="recent-activity">
+                        <MudIcon Icon="@Labels.ActivityIcon(a.Type)" Size="Size.Small" Color="Color.Primary" />
+                        <div class="widget-main">
+                            <MudLink Href="@(a.ProjectId is { } p ? $"/projects/{p}" : $"/customers/{a.CustomerId}")" Typo="Typo.body2" Class="clamp-2">
+                                @(a.Subject is null ? Shorten(Generated(a.Description)) : Generated(a.Subject))
+                            </MudLink>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block text-break">
+                                @Labels.Of(a.Type) · @(a.ProjectName ?? a.CustomerName) · @a.AuthorName
+                            </MudText>
+                        </div>
+                        <MudText Typo="Typo.caption" Class="col-nowrap" title="@Fmt.DateTimeText(a.Date)">@Fmt.Relative(a.Date, Clock)</MudText>
+                    </div>
+                }
+            }
+        </MudPaper>
+    </div>
+</div>
+
+<MudPaper Class="pa-4 mt-4" Outlined="true" Elevation="0" data-testid="widget-recent">
+    <MudText Typo="Typo.h6" Class="mb-2">@T("Recently updated")</MudText>
+    @if (_recent.Loading)
+    {
+        <MudSkeleton /><MudSkeleton />
+    }
+    else if (_recent.Failed || _recent.Data is null)
+    {
+        <WidgetError OnRetry="_recent.LoadAsync" />
+    }
+    else
+    {
+        <div class="dashboard-grid">
+            <div>
+                <MudText Typo="Typo.subtitle2" Class="mb-1">@T("Customers")</MudText>
+                @if (_recent.Data.Customers.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">@T("No customers yet.")</MudText>
+                }
+                @foreach (var c in _recent.Data.Customers)
+                {
+                    <div class="widget-row" data-testid="recent-customer">
+                        <MudLink Href="@($"/customers/{c.Id}")" Typo="Typo.body2" Class="widget-main clamp-2">@c.Name</MudLink>
+                        <CustomerStatusChip Status="c.Status" />
+                        <MudText Typo="Typo.caption" Class="col-nowrap mud-text-secondary">@T("updated {0}", Fmt.Relative(c.UpdatedAt, Clock))</MudText>
+                    </div>
+                }
+            </div>
+            <div>
+                <MudText Typo="Typo.subtitle2" Class="mb-1">@T("Projects")</MudText>
+                @if (_recent.Data.Projects.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">@T("No projects yet.")</MudText>
+                }
+                @foreach (var p in _recent.Data.Projects)
+                {
+                    <div class="widget-row" data-testid="recent-project">
+                        <MudLink Href="@($"/projects/{p.Id}")" Typo="Typo.body2" Class="widget-main clamp-2">@p.Name</MudLink>
+                        <ProjectStatusChip Name="@p.StatusName" Color="@p.StatusColor" />
+                        <MudText Typo="Typo.caption" Class="col-nowrap mud-text-secondary">@T("updated {0}", Fmt.Relative(p.UpdatedAt, Clock))</MudText>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</MudPaper>
+
+@code {
+    private Widget<DashboardKpis> _kpis = default!;
+    private Widget<IReadOnlyList<StatusBar>> _statuses = default!;
+    private Widget<IReadOnlyList<DeadlineItem>> _deadlines = default!;
+    private Widget<IReadOnlyList<TaskDto>> _myTasks = default!;
+    private Widget<IReadOnlyList<ActivityDto>> _activities = default!;
+    private Widget<RecentlyUpdated> _recent = default!;
+
+    /// <summary>A fresh install: no customers, projects or tasks at all.</summary>
+    private bool IsEmptyDatabase =>
+        _recent.Data is { Customers.Count: 0, Projects.Count: 0 } && _kpis.Data is { OpenTasks: 0 };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _kpis = new(() => Dashboard.GetKpisAsync(), Logger);
+        _statuses = new(() => Dashboard.GetProjectsByStatusAsync(), Logger);
+        _deadlines = new(() => Dashboard.GetUpcomingDeadlinesAsync(), Logger);
+        _myTasks = new(() => Dashboard.GetMyOpenTasksAsync(), Logger);
+        _activities = new(() => Dashboard.GetRecentActivitiesAsync(), Logger);
+        _recent = new(() => Dashboard.GetRecentlyUpdatedAsync(), Logger);
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        // Each widget has its own DbContext (service call), so they can load in parallel.
+        await Task.WhenAll(_kpis.LoadAsync(), _statuses.LoadAsync(), _deadlines.LoadAsync(), _myTasks.LoadAsync(), _activities.LoadAsync(), _recent.LoadAsync());
+    }
+
+    private static string Shorten(string text) => text.Length <= 80 ? text : text[..80] + "…";
+}

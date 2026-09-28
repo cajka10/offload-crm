@@ -1,0 +1,39 @@
+@page "/account/refresh"
+@using Microsoft.AspNetCore.Authentication
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject Offload.Crm.Web.Auth.SignInTickets Tickets
+@inject NavigationManager Navigation
+
+<PageTitle>@T("Signing in") · Offload CRM</PageTitle>
+<p class="account-text">@T("Updating your session…")</p>
+
+@*
+    After "Change password" (D-24) the interactive UI redirects here with a one-time ticket: the security stamp
+    changed (other sessions end), and this static page re-issues the cookie so the current session stays signed in.
+*@
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "ticket")]
+    private string? Ticket { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = Tickets.Redeem(Ticket);
+        var user = userId is null ? null : await UserManager.FindByIdAsync(userId);
+        if (user is not { IsActive: true })
+        {
+            Navigation.NavigateTo("account/login?expired=1", forceLoad: true);
+            return;
+        }
+
+        var current = await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+        await SignInManager.SignInAsync(user, isPersistent: current.Properties?.IsPersistent ?? false);
+        Navigation.NavigateTo(Login.SafeReturnUrl(ReturnUrl), forceLoad: true);
+    }
+}

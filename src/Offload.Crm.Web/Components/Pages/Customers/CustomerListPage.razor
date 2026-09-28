@@ -1,0 +1,204 @@
+@page "/customers"
+@inherits ListPageBase<CustomerListItem>
+@inject ICustomerService CustomerService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ILogger<CustomerListPage> Logger
+
+<PageTitle>@T("Customers") · Offload CRM</PageTitle>
+
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@T("Customers")</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="CreateAsync" data-testid="customer-new">@T("New customer")</MudButton>
+</div>
+
+<MudPaper Class="pa-3 mb-3" Outlined="true" Elevation="0">
+    <div class="d-flex flex-wrap gap-3 align-center">
+        <MudTextField T="string" Value="@SearchText" ValueChanged="SetSearch"
+                      Placeholder="@T("Search name, IČO, VAT, e-mail or contact…")" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      DebounceInterval="350" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Class="flex-grow-1" Style="min-width: 220px;" data-testid="customer-search" />
+        <MudSelect T="CustomerStatus?" Value="@_status" ValueChanged="@(v => SetFilter(StatusKey, v?.ToString()))" Label="@T("Status")"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 220px; min-width: 160px;"
+                   data-testid="customer-status-filter">
+            <MudSelectItem T="CustomerStatus?" Value="@((CustomerStatus?)null)">@T("All statuses")</MudSelectItem>
+            @foreach (var status in Enum.GetValues<CustomerStatus>())
+            {
+                <MudSelectItem T="CustomerStatus?" Value="@((CustomerStatus?)status)">@Labels.Of(status)</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+</MudPaper>
+
+<MudPaper Outlined="true" Elevation="0" Class="list-table" data-testid="customer-table">
+    @if (Loading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" data-testid="loading" />
+    }
+
+    @if (Items.Count == 0 && !Loading)
+    {
+        <ListStateView LoadError="LoadError" IsEmptyDatabase="IsEmptyDatabase" Icon="@Icons.Material.Filled.Business"
+                       EmptyText="@T("No customers yet.")" NoResultsText="@T("No customers match your search or filter.")"
+                       CreateText="@T("New customer")" OnCreate="CreateAsync" OnClearFilters="ClearFilters" OnRetry="ReloadAsync" />
+    }
+    else if (Items.Count > 0)
+    {
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+            <thead>
+                <tr>
+                    <SortHeader Label="@T("Company")" Key="@CustomerSort.CompanyName" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                    <SortHeader Label="@T("IČO")" Key="@CustomerSort.RegistrationNo" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1280" />
+                    <SortHeader Label="@T("City")" Key="@CustomerSort.City" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-600" />
+                    <SortHeader Label="@T("Status")" Key="@CustomerSort.Status" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                    <SortHeader Label="@T("E-mail")" Key="@CustomerSort.Email" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                    <SortHeader Label="@T("Phone")" Key="@CustomerSort.Phone" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                    <SortHeader Label="@T("Projects")" Key="@CustomerSort.ProjectCount" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-960" Align="right" />
+                    <SortHeader Label="@T("Last activity")" Key="@CustomerSort.LastActivity" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-960" />
+                    <SortHeader Label="@T("Created")" Key="@CustomerSort.Created" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                    <th class="col-actions">@T("Actions")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Items)
+                {
+                    <tr @key="c.Id">
+                        <td>
+                            <MudLink Href="@($"/customers/{c.Id}")" Typo="Typo.body2" Class="clamp-2" title="@c.CompanyName" data-testid="customer-link">@c.CompanyName</MudLink>
+                        </td>
+                        <td class="hide-lt-1280 col-nowrap">@Fmt.OrDash(c.RegistrationNo)</td>
+                        <td class="hide-lt-600">@Fmt.OrDash(c.City)</td>
+                        <td><CustomerStatusChip Status="c.Status" /></td>
+                        <td class="hide-lt-1440">
+                            @if (c.Email is null)
+                            {
+                                @Fmt.Empty
+                            }
+                            else
+                            {
+                                <MudLink Href="@($"mailto:{c.Email}")" Typo="Typo.body2">@c.Email</MudLink>
+                            }
+                        </td>
+                        <td class="hide-lt-1440 col-nowrap">@Fmt.OrDash(c.Phone)</td>
+                        <td class="hide-lt-960" style="text-align: right;">@c.ProjectCount</td>
+                        <td class="hide-lt-960 col-nowrap">@Fmt.DateTimeText(c.LastActivityAt)</td>
+                        <td class="hide-lt-1440 col-nowrap">@Fmt.Date(c.CreatedAt)</td>
+                        <td class="col-actions">
+                            <MudTooltip Text="@T("Edit")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit customer")"
+                                               OnClick="() => EditAsync(c.Id)" data-testid="customer-edit" />
+                            </MudTooltip>
+                            <MudTooltip Text="@T("Delete")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete customer")"
+                                               OnClick="() => DeleteAsync(c)" data-testid="customer-delete" />
+                            </MudTooltip>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+
+    <ListPager Page="State.Page" PageSize="State.PageSize" TotalCount="TotalCount" OnPageChanged="GoToPage" OnPageSizeChanged="SetPageSize" />
+</MudPaper>
+
+@code {
+    private const string StatusKey = "status";
+
+    private CustomerStatus? _status;
+
+    protected override IEnumerable<string> FilterKeys => [StatusKey];
+
+    protected override string DefaultSort => CustomerSort.CompanyName;
+
+    protected override void OnStateLoaded() =>
+        _status = Enum.TryParse<CustomerStatus>(State.Filter(StatusKey), ignoreCase: true, out var s) && Enum.IsDefined(s) ? s : null;
+
+    protected override Task<PagedResult<CustomerListItem>> FetchAsync(ListState state, CancellationToken ct) =>
+        CustomerService.ListAsync(
+            new CustomerListQuery
+            {
+                Search = state.Search,
+                Status = _status,
+                Sort = EffectiveSort,
+                Descending = EffectiveDescending,
+                Page = state.Page,
+                PageSize = state.PageSize,
+            },
+            ct);
+
+    protected override async Task<bool> IsDatabaseEmptyAsync(CancellationToken ct) =>
+        (await CustomerService.ListAsync(new CustomerListQuery { PageSize = 1 }, ct)).TotalCount == 0;
+
+    private async Task CreateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<CustomerEditDialog>("New customer", DialogExtensions.FormOptions());
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: CustomerDetail created })
+        {
+            Navigation.NavigateTo($"/customers/{created.Id}");
+        }
+    }
+
+    private async Task EditAsync(int id)
+    {
+        try
+        {
+            var customer = await CustomerService.GetAsync(id);
+            var parameters = new DialogParameters<CustomerEditDialog>
+            {
+                { x => x.CustomerId, id },
+                { x => x.Initial, CustomerInput.From(customer) },
+            };
+            var dialog = await DialogService.ShowAsync<CustomerEditDialog>("Edit customer", parameters, DialogExtensions.FormOptions());
+            if (await dialog.Result is { Canceled: false })
+            {
+                await ReloadAsync();
+            }
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This customer no longer exists.", Severity.Warning);
+            await ReloadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(CustomerListItem customer)
+    {
+        var confirmed = await DialogService.ConfirmDeleteAsync(
+            "Delete customer",
+            $"Delete \"{customer.CompanyName}\"? Its contacts and activities will be deleted too. This cannot be undone.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await CustomerService.DeleteAsync(customer.Id);
+            Snackbar.Add($"Customer \"{customer.CompanyName}\" deleted.", Severity.Success);
+        }
+        catch (ConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This customer was already deleted.", Severity.Info);
+        }
+        catch (SessionExpiredException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Deleting customer {Id} failed", customer.Id);
+            Snackbar.Add("Deleting failed. Please try again.", Severity.Error);
+        }
+
+        await ReloadAsync();
+    }
+}

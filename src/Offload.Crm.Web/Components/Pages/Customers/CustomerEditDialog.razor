@@ -1,0 +1,167 @@
+@inject ICustomerService CustomerService
+@inject ISnackbar Snackbar
+@inject ILogger<CustomerEditDialog> Logger
+
+<MudDialog data-testid="customer-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New customer" : "Edit customer")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="customer-form" Model="_model" novalidate OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true">
+            <FormValidator @ref="_serverErrors" />
+
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">
+                    @T("Please fix the highlighted fields.")
+                </MudAlert>
+            }
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="8">
+                    <MudTextField Label="@T("Company name")" Required="true" RequiredError="@T("Company name is required.")"
+                                  @bind-Value="_model.CompanyName" For="@(() => _model.CompanyName)"
+                                  AutoFocus="true" Counter="200" data-testid="customer-companyName" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="CustomerStatus" Label="@T("Status")" @bind-Value="_model.Status" For="@(() => _model.Status)"
+                               data-testid="customer-status-select">
+                        @foreach (var status in Enum.GetValues<CustomerStatus>())
+                        {
+                            <MudSelectItem T="CustomerStatus" Value="@status">@Labels.Of(status)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Registration no. (IČO)")" @bind-Value="_model.RegistrationNo" For="@(() => _model.RegistrationNo)"
+                                  Counter="20" data-testid="customer-registrationNo" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("VAT ID (DIČ)")" @bind-Value="_model.VatId" For="@(() => _model.VatId)"
+                                  Counter="20" data-testid="customer-vatId" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("E-mail")" InputType="InputType.Email" @bind-Value="_model.Email" For="@(() => _model.Email)"
+                                  Counter="254" data-testid="customer-email" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Phone")" InputType="InputType.Telephone" @bind-Value="_model.Phone" For="@(() => _model.Phone)"
+                                  Counter="30" data-testid="customer-phone" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Website")" @bind-Value="_model.Website" For="@(() => _model.Website)"
+                                  HelperText="@T("https:// is added automatically when missing")" Counter="500" data-testid="customer-website" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Street")" @bind-Value="_model.Street" For="@(() => _model.Street)" Counter="200" data-testid="customer-street" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("City")" @bind-Value="_model.City" For="@(() => _model.City)" Counter="200" data-testid="customer-city" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Postal code")" @bind-Value="_model.PostalCode" For="@(() => _model.PostalCode)" Counter="200" data-testid="customer-postalCode" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Country")" @bind-Value="_model.Country" For="@(() => _model.Country)" Counter="200" data-testid="customer-country" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Notes")" Lines="4" AutoGrow="true" MaxLines="12" Counter="4000"
+                                  @bind-Value="_model.Notes" For="@(() => _model.Notes)" data-testid="customer-notes" />
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="customer-form" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_saving" data-testid="dialog-save">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @T("Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Null for a new customer.</summary>
+    [Parameter]
+    public int? CustomerId { get; set; }
+
+    /// <summary>Values to edit; copied so that Cancel discards changes.</summary>
+    [Parameter]
+    public CustomerInput? Initial { get; set; }
+
+    private CustomerInput _model = new();
+    private FormValidator? _serverErrors;
+    private bool _saving;
+    private bool _showSummary;
+
+    private bool IsNew => CustomerId is null;
+
+    protected override void OnInitialized()
+    {
+        if (Initial is not null)
+        {
+            _model = new CustomerInput
+            {
+                CompanyName = Initial.CompanyName,
+                RegistrationNo = Initial.RegistrationNo,
+                VatId = Initial.VatId,
+                Status = Initial.Status,
+                Email = Initial.Email,
+                Phone = Initial.Phone,
+                Website = Initial.Website,
+                Street = Initial.Street,
+                City = Initial.City,
+                PostalCode = Initial.PostalCode,
+                Country = Initial.Country,
+                Notes = Initial.Notes,
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return; // double-click guard
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew
+                ? await CustomerService.CreateAsync(_model)
+                : await CustomerService.UpdateAsync(CustomerId!.Value, _model);
+            Snackbar.Add(IsNew ? $"Customer \"{saved.CompanyName}\" created." : "Customer saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _serverErrors?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This customer no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving customer failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,29 @@
+<a href="@Href" class="kpi-card-link" data-testid="@TestId">
+    <MudPaper Class="pa-4 kpi-card" Outlined="true" Elevation="0">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icon" Size="Size.Small" Color="@(Danger ? Color.Error : Color.Primary)" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@T(Label)</MudText>
+        </div>
+        <MudText Typo="Typo.h4" Class="@(Danger ? "overdue" : null)" data-testid="kpi-value">@Value</MudText>
+    </MudPaper>
+</a>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Href { get; set; } = "/";
+
+    [Parameter]
+    public string Icon { get; set; } = Icons.Material.Filled.Insights;
+
+    [Parameter]
+    public bool Danger { get; set; }
+
+    [Parameter]
+    public string? TestId { get; set; }
+}

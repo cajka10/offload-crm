@@ -1,0 +1,198 @@
+@inject ITaskService TaskService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject TimeProvider Clock
+@inject ILogger<ProjectTasksPanel> Logger
+
+@* Tasks of one project with quick add, inline status change, edit and delete (T-16). *@
+<EditForm Model="_quick" OnSubmit="QuickAddAsync" class="d-flex gap-2 align-start mb-3" data-testid="task-quick-add">
+    <MudTextField @bind-Value="_quick.Title" Placeholder="@T("Add a task and press Enter…")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Error="@(_quickError is not null)" ErrorText="@_quickError" Class="flex-grow-1" data-testid="task-quick-title" />
+    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" Class="mt-1"
+               data-testid="task-quick-submit">@T("Add")</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddWithDetailsAsync" Class="mt-1 hide-lt-600">@T("More…")</MudButton>
+</EditForm>
+
+@if (_loadError)
+{
+    <MudAlert Severity="Severity.Error" data-testid="load-error">
+        @T("Tasks could not be loaded.") <MudLink OnClick="LoadAsync" Typo="Typo.body2">@T("Try again")</MudLink>
+    </MudAlert>
+}
+else if (_tasks is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_tasks.Count == 0)
+{
+    <div class="list-state" data-testid="tasks-empty">
+        <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Size="Size.Large" Class="mb-2 mud-text-secondary" />
+        <MudText>@T("No tasks yet. Add the first one above.")</MudText>
+    </div>
+}
+else
+{
+    var today = AppTime.Today(Clock);
+    <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="list-table" data-testid="project-tasks-table">
+        <thead>
+            <tr>
+                <th>@T("Title")</th>
+                <th>@T("Status")</th>
+                <th class="hide-lt-960">@T("Priority")</th>
+                <th class="hide-lt-1280">@T("Assignee")</th>
+                <th class="hide-lt-600">@T("Due")</th>
+                <th class="col-actions">@T("Actions")</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in _tasks)
+            {
+                <tr @key="t.Id" data-testid="project-task-row">
+                    <td><span class="clamp-2" title="@t.Title">@t.Title</span></td>
+                    <td style="min-width: 140px;">
+                        <TaskStatusSelect Status="t.Status" StatusChanged="s => ChangeStatusAsync(t, s)" />
+                    </td>
+                    <td class="hide-lt-960"><PriorityChip Priority="t.Priority" /></td>
+                    <td class="hide-lt-1280"><UserName Name="@t.AssigneeName" IsActive="t.AssigneeIsActive" EmptyText="@T("Unassigned")" /></td>
+                    <td class="hide-lt-600 col-nowrap"><span class="@(t.IsOverdue(today) ? "overdue" : null)">@Fmt.Date(t.DueDate)</span></td>
+                    <td class="col-actions">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit task")" OnClick="() => EditAsync(t)" data-testid="task-edit" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete task")"
+                                       OnClick="() => DeleteAsync(t)" data-testid="task-delete" />
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public int ProjectId { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private IReadOnlyList<TaskDto>? _tasks;
+    private bool _loadError;
+    private bool _busy;
+    private string? _quickError;
+    private readonly QuickTask _quick = new();
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    public async Task LoadAsync()
+    {
+        _loadError = false;
+        try
+        {
+            var result = await TaskService.ListAsync(new TaskListQuery
+            {
+                ProjectId = ProjectId,
+                Sort = TaskSort.Status,
+                PageSize = PagedQuery.MaxPageSize,
+            });
+            _tasks = result.Items;
+        }
+        catch (Exception ex) when (ex is not SessionExpiredException)
+        {
+            Logger.LogError(ex, "Loading project tasks failed");
+            _loadError = true;
+        }
+    }
+
+    private async Task QuickAddAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _quickError = null;
+        try
+        {
+            await TaskService.CreateAsync(new TaskInput { Title = _quick.Title, ProjectId = ProjectId });
+            _quick.Title = null;
+            Snackbar.Add("Task added.", Severity.Success);
+            await ChangedAsync();
+        }
+        catch (AppValidationException ex)
+        {
+            _quickError = ex.Errors.TryGetValue(nameof(TaskInput.Title), out var messages) ? messages[0] : ex.Errors.First().Value[0];
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Quick add failed");
+            Snackbar.Add("Adding the task failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddWithDetailsAsync()
+    {
+        var parameters = new DialogParameters<TaskEditDialog>
+        {
+            { x => x.ProjectId, ProjectId },
+            { x => x.LockProject, true },
+            { x => x.Initial, new TaskInput { ProjectId = ProjectId, Title = _quick.Title } },
+        };
+        var dialog = await DialogService.ShowAsync<TaskEditDialog>("New task", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            _quick.Title = null;
+            await ChangedAsync();
+        }
+    }
+
+    private async Task EditAsync(TaskDto task)
+    {
+        var parameters = new DialogParameters<TaskEditDialog>
+        {
+            { x => x.TaskId, task.Id },
+            { x => x.Initial, TaskInput.From(task) },
+        };
+        var dialog = await DialogService.ShowAsync<TaskEditDialog>("Edit task", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await ChangedAsync();
+        }
+    }
+
+    private async Task ChangeStatusAsync(TaskDto task, TaskItemStatus status)
+    {
+        if (await TaskActions.ChangeStatusAsync(TaskService, Snackbar, Logger, task, status))
+        {
+            await ChangedAsync();
+        }
+        else
+        {
+            await LoadAsync(); // revert the select
+        }
+    }
+
+    private async Task DeleteAsync(TaskDto task)
+    {
+        if (await TaskActions.DeleteAsync(TaskService, DialogService, Snackbar, Logger, task))
+        {
+            await ChangedAsync();
+        }
+    }
+
+    private async Task ChangedAsync()
+    {
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    private sealed class QuickTask
+    {
+        public string? Title { get; set; }
+    }
+}

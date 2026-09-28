@@ -1,0 +1,39 @@
+@page "/account/logout"
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+@inject ILogger<Logout> Logger
+
+<PageTitle>@T("Sign out") · Offload CRM</PageTitle>
+
+<LanguageLinks />
+
+@*
+    D-19 / BUG-011: a GET only shows this confirmation (no auto-submit), so a foreign link can't sign anyone out.
+    The app-bar Logout button posts this form directly (same origin + antiforgery token).
+*@
+<h1 class="account-title">@T("Sign out?")</h1>
+<p class="account-text">@T("You will be signed out of Offload CRM in all open tabs.")</p>
+<EditForm Model="this" method="post" OnSubmit="SignOutAsync" FormName="logout">
+    <button type="submit" class="account-submit" data-testid="logout-submit">@T("Sign out")</button>
+</EditForm>
+<p class="account-text"><a href="/">@T("Cancel and go back to the app")</a></p>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private async Task SignOutAsync()
+    {
+        // Changing the security stamp ends every other session of this user (other tabs/circuits: next action;
+        // other browsers: next cookie validation, <= 1 min) (BUG-003).
+        if (HttpContext.User.Identity?.IsAuthenticated == true && await UserManager.GetUserAsync(HttpContext.User) is { } user)
+        {
+            await UserManager.UpdateSecurityStampAsync(user);
+            Logger.LogInformation("User {Email} signed out", user.Email);
+        }
+
+        await SignInManager.SignOutAsync();
+        Navigation.NavigateTo("account/login", forceLoad: true);
+    }
+}

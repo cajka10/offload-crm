@@ -1,0 +1,97 @@
+@using Offload.Crm.Infrastructure.Persistence
+@inject DatabaseSelector Databases
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject ILogger<DatabasePanel> Logger
+@inject Offload.Crm.Web.Auth.AdminGuard AdminGuard
+
+@* Settings → Database (D-26): app-wide switch between the production and the test database. *@
+@if (!Databases.CanSwitch)
+{
+    <MudAlert Severity="Severity.Info" data-testid="db-switch-disabled">
+        @T("Only the production database is configured. To enable switching to a test database, set:") <code>ConnectionStrings:Test</code>
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4" Style="max-width: 720px;">
+        @T("Choose which database the application works with. The switch applies to all users immediately and is kept after a restart; open pages reload automatically. The test database is a separate copy — changes made there never reach production.")
+    </MudText>
+
+    <div class="db-targets mb-4" data-testid="db-targets">
+        @foreach (var target in Databases.ConfiguredTargets.OrderBy(t => t))
+        {
+            var active = target == Databases.Current;
+            <MudPaper Outlined="true" Class="@($"pa-4 db-target {(active ? "db-target-active" : string.Empty)} {(target == DatabaseTarget.Test ? "db-target-test" : string.Empty)}")"
+                      data-testid="@($"db-target-{target.ToString().ToLowerInvariant()}")">
+                <div class="d-flex align-center gap-2 mb-1">
+                    <MudIcon Icon="@(target == DatabaseTarget.Production ? Icons.Material.Filled.Storage : Icons.Material.Filled.Science)" />
+                    <MudText Typo="Typo.h6">@T(target.ToString())</MudText>
+                    <MudSpacer />
+                    @if (active)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="@(target == DatabaseTarget.Test ? Color.Secondary : Color.Primary)" Variant="Variant.Filled"
+                                 Class="ma-0" data-testid="db-active-chip">@T("Active")</MudChip>
+                    }
+                </div>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    @T("Database") <code>@Databases.GetDatabaseName(target)</code>
+                </MudText>
+                @if (!active)
+                {
+                    <MudButton Variant="Variant.Filled" Color="@(target == DatabaseTarget.Test ? Color.Secondary : Color.Primary)" Disabled="_busy"
+                               StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="() => SwitchAsync(target)"
+                               data-testid="@($"db-switch-{target.ToString().ToLowerInvariant()}")">
+                        @(_busy ? T("Switching…") : T("Switch to {0}", T(target.ToString())))
+                    </MudButton>
+                }
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    private bool _busy;
+
+    private async Task SwitchAsync(DatabaseTarget target)
+    {
+        var message = target == DatabaseTarget.Test
+            ? T("Switch the whole application to the TEST database \"{0}\"? All users will work with test data until you switch back.", Databases.GetDatabaseName(target))
+            : T("Switch the whole application back to the PRODUCTION database \"{0}\"?", Databases.GetDatabaseName(target));
+        if (!await DialogService.ConfirmDeleteAsync("Switch database", message, T("Switch to {0}", T(target.ToString()))))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await AdminGuard.EnsureAdminAsync("switch the database"); // D-27: server-side, not just the hidden tab
+            await Databases.SwitchAsync(target);
+            // Reload into a new circuit bound to the new database (the layout also reloads every other open tab).
+            Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+        }
+        catch (ForbiddenException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (DatabaseUnavailableException ex)
+        {
+            Logger.LogError(ex, "Switching to the {Target} database failed", target);
+            Snackbar.Add(
+                T("The {0} database \"{1}\" is not reachable.", T(target.ToString()), Databases.GetDatabaseName(target)) + " "
+                    + T("The application stays on {0}.", T(Databases.Current.ToString())),
+                Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Switching to the {Target} database failed", target);
+            Snackbar.Add("The database could not be switched. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

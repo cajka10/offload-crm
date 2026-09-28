@@ -1,0 +1,225 @@
+@inject IUserAdminService Users
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ILogger<UsersPanel> Logger
+
+@* Settings → Users (D-24). Small user base: loaded at once, filtered locally, no paging. *@
+<div class="d-flex align-center flex-wrap gap-3 mb-3">
+    <MudTextField T="string" @bind-Value="_search" Placeholder="@T("Search name or e-mail…")" Clearable="true" Immediate="true"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Class="flex-grow-1" Style="min-width: 200px;" data-testid="user-search" />
+    <MudSelect T="string" @bind-Value="_statusFilter" Label="@T("Status")" Variant="Variant.Outlined" Margin="Margin.Dense"
+               Style="max-width: 160px; min-width: 130px;" data-testid="user-status-filter">
+        <MudSelectItem T="string" Value="@("all")">@T("All")</MudSelectItem>
+        <MudSelectItem T="string" Value="@("active")">@T("Active")</MudSelectItem>
+        <MudSelectItem T="string" Value="@("inactive")">@T("Inactive")</MudSelectItem>
+    </MudSelect>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="CreateAsync"
+               data-testid="user-new">@T("New user")</MudButton>
+</div>
+
+@if (_users is null && !_loadError)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" data-testid="loading" />
+}
+else if (_loadError)
+{
+    <MudAlert Severity="Severity.Error" data-testid="load-error">
+        @T("Users could not be loaded.") <MudLink OnClick="LoadAsync" Typo="Typo.body2">@T("Try again")</MudLink>
+    </MudAlert>
+}
+else if (Filtered.Count == 0)
+{
+    <div class="list-state" data-testid="no-results">
+        <MudText>@T("No users match your search or filter.")</MudText>
+    </div>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="list-table" data-testid="user-table">
+        <thead>
+            <tr>
+                <th>@T("Full name")</th>
+                <th class="hide-lt-600">@T("E-mail")</th>
+                <th>@T("Status")</th>
+                <th>@T("Role")</th>
+                <th class="hide-lt-1280">@T("Created")</th>
+                <th class="hide-lt-960">@T("Last sign-in")</th>
+                <th class="col-actions">@T("Actions")</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in Filtered)
+            {
+                <tr @key="u.Id" data-testid="user-row">
+                    <td>
+                        <span class="clamp-2" data-testid="user-name">@u.FullName</span>
+                        @if (u.IsCurrentUser)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@T("(you)")</MudText>
+                        }
+                    </td>
+                    <td class="hide-lt-600">@u.Email</td>
+                    <td>
+                        <MudChip T="string" Size="Size.Small" Class="ma-0" Color="@(u.IsActive ? Color.Success : Color.Default)" data-testid="user-status">
+                            @T(u.IsActive ? "Active" : "Inactive")
+                        </MudChip>
+                    </td>
+                    <td>
+                        <MudChip T="string" Size="Size.Small" Class="ma-0" Variant="@(u.IsAdmin ? Variant.Filled : Variant.Outlined)"
+                                 Color="@(u.IsAdmin ? Color.Primary : Color.Default)" data-testid="user-role">
+                            @T(u.IsAdmin ? "Administrator" : "User")
+                        </MudChip>
+                    </td>
+                    <td class="hide-lt-1280 col-nowrap">@Fmt.Date(u.CreatedAt)</td>
+                    <td class="hide-lt-960 col-nowrap">@Fmt.DateTimeText(u.LastSignInAt)</td>
+                    <td class="col-actions">
+                        <MudTooltip Text="@T("Edit")">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit user")" OnClick="() => EditAsync(u)" data-testid="user-edit" />
+                        </MudTooltip>
+                        <MudTooltip Text="@T("Reset password")">
+                            <MudIconButton Icon="@Icons.Material.Filled.Key" Size="Size.Small" aria-label="@T("Reset password")" OnClick="() => ResetPasswordAsync(u)"
+                                           data-testid="user-reset-password" />
+                        </MudTooltip>
+                        @if (!u.IsCurrentUser)
+                        {
+                            @if (u.IsActive)
+                            {
+                                <MudTooltip Text="@T("Deactivate")">
+                                    <MudIconButton Icon="@Icons.Material.Filled.PersonOff" Size="Size.Small" Color="Color.Error" aria-label="@T("Deactivate user")"
+                                                   OnClick="() => DeactivateAsync(u)" data-testid="user-deactivate" />
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@T("Reactivate")">
+                                    <MudIconButton Icon="@Icons.Material.Filled.PersonAddAlt1" Size="Size.Small" Color="Color.Success" aria-label="@T("Reactivate user")"
+                                                   OnClick="() => ReactivateAsync(u)" data-testid="user-reactivate" />
+                                </MudTooltip>
+                            }
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    private IReadOnlyList<UserListItem>? _users;
+    private bool _loadError;
+    private string? _search;
+    private string _statusFilter = "all";
+
+    private IReadOnlyList<UserListItem> Filtered => (_users ?? [])
+        .Where(u => _statusFilter == "all" || u.IsActive == (_statusFilter == "active"))
+        .Where(u => string.IsNullOrWhiteSpace(_search)
+            || u.FullName.Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase)
+            || (u.Email ?? string.Empty).Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase))
+        .ToList();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = false;
+        try
+        {
+            _users = await Users.ListAsync(new UserListQuery());
+        }
+        catch (Exception ex) when (ex is not SessionExpiredException)
+        {
+            Logger.LogError(ex, "Loading users failed");
+            _loadError = true;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<UserEditDialog>("New user", DialogExtensions.FormOptions(MaxWidth.Small));
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task EditAsync(UserListItem user)
+    {
+        var parameters = new DialogParameters<UserEditDialog> { { x => x.Existing, user } };
+        var dialog = await DialogService.ShowAsync<UserEditDialog>("Edit user", parameters, DialogExtensions.FormOptions(MaxWidth.Small));
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task ResetPasswordAsync(UserListItem user)
+    {
+        var parameters = new DialogParameters<PasswordDialog>
+        {
+            { x => x.UserId, user.Id },
+            { x => x.UserName, user.FullName },
+        };
+        await DialogService.ShowAsync<PasswordDialog>("Reset password", parameters, DialogExtensions.FormOptions(MaxWidth.Small));
+    }
+
+    private async Task DeactivateAsync(UserListItem user)
+    {
+        try
+        {
+            var impact = await Users.GetDeactivationImpactAsync(user.Id);
+            var tasks = Plural(impact.OpenTasks, "{0} open task", "{0} open tasks", "{0} otvorená úloha", "{0} otvorené úlohy", "{0} otvorených úloh");
+            var projects = Plural(impact.ActiveProjects, "{0} active project", "{0} active projects", "{0} aktívny projekt", "{0} aktívne projekty", "{0} aktívnych projektov");
+            if (!await DialogService.ConfirmDeleteAsync(
+                    "Deactivate user",
+                    T("{0} will be signed out within a minute and can't sign in. Their {1} and {2} stay assigned. Reassign them manually.", user.FullName, tasks, projects),
+                    "Deactivate"))
+            {
+                return;
+            }
+
+            await Users.DeactivateAsync(user.Id);
+            Snackbar.Add($"{user.FullName} was deactivated.", Severity.Success);
+        }
+        catch (ConflictException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (SessionExpiredException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Deactivating user failed");
+            Snackbar.Add("The user could not be deactivated. Please try again.", Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ReactivateAsync(UserListItem user)
+    {
+        if (!await DialogService.ConfirmDeleteAsync("Reactivate user", $"Reactivate {user.FullName}? They can sign in again.", "Reactivate"))
+        {
+            return;
+        }
+
+        try
+        {
+            await Users.ReactivateAsync(user.Id);
+            Snackbar.Add($"{user.FullName} was reactivated.", Severity.Success);
+        }
+        catch (SessionExpiredException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reactivating user failed");
+            Snackbar.Add("The user could not be reactivated. Please try again.", Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+}

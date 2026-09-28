@@ -1,0 +1,25 @@
+@inject Offload.Crm.Web.Settings.AppInfoService AppInfo
+
+@* Settings → General (T-25): read-only. *@
+@if (_info is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <dl class="detail-list" style="max-width: 640px;" data-testid="app-info">
+        <dt>@T("Version")</dt><dd data-testid="app-version">@_info.Version</dd>
+        <dt>@T("Environment")</dt><dd data-testid="app-environment">@_info.Environment</dd>
+        <dt>@T("Currency")</dt><dd>@_info.Currency</dd>
+        <dt>@T("Culture")</dt><dd>@_info.Culture</dd>
+        <dt>@T("Time zone")</dt><dd>@_info.TimeZone</dd>
+        <dt>@T("Database server")</dt><dd>@_info.DatabaseServer</dd>
+        <dt>@T("Active database")</dt><dd data-testid="app-database">@_info.Database</dd>
+    </dl>
+}
+
+@code {
+    private Offload.Crm.Web.Settings.AppInfo? _info;
+
+    protected override async Task OnInitializedAsync() => _info = await AppInfo.GetAsync();
+}

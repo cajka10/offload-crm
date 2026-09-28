@@ -1,0 +1,136 @@
+@inject IContactService ContactService
+@inject ISnackbar Snackbar
+@inject ILogger<ContactEditDialog> Logger
+
+<MudDialog data-testid="contact-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New contact" : "Edit contact")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="contact-form" Model="_model" novalidate OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true">
+            <FormValidator @ref="_serverErrors" />
+
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">
+                    @T("Please fix the highlighted fields.")
+                </MudAlert>
+            }
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("First name")" @bind-Value="_model.FirstName" For="@(() => _model.FirstName)"
+                                  AutoFocus="true" Counter="100" data-testid="contact-firstName" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Last name")" Required="true" RequiredError="@T("Last name is required.")"
+                                  @bind-Value="_model.LastName" For="@(() => _model.LastName)" Counter="100" data-testid="contact-lastName" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Position")" @bind-Value="_model.Position" For="@(() => _model.Position)" Counter="100" data-testid="contact-position" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("E-mail")" InputType="InputType.Email" @bind-Value="_model.Email" For="@(() => _model.Email)"
+                                  Counter="254" data-testid="contact-email" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="@T("Phone")" InputType="InputType.Telephone" @bind-Value="_model.Phone" For="@(() => _model.Phone)"
+                                  Counter="30" data-testid="contact-phone" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Notes")" Lines="3" AutoGrow="true" MaxLines="10" Counter="4000"
+                                  @bind-Value="_model.Notes" For="@(() => _model.Notes)" data-testid="contact-notes" />
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="contact-form" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_saving" data-testid="dialog-save">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @T("Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public int CustomerId { get; set; }
+
+    /// <summary>Null for a new contact.</summary>
+    [Parameter]
+    public int? ContactId { get; set; }
+
+    [Parameter]
+    public ContactInput? Initial { get; set; }
+
+    private ContactInput _model = new();
+    private FormValidator? _serverErrors;
+    private bool _saving;
+    private bool _showSummary;
+
+    private bool IsNew => ContactId is null;
+
+    protected override void OnInitialized()
+    {
+        if (Initial is not null)
+        {
+            _model = new ContactInput
+            {
+                FirstName = Initial.FirstName,
+                LastName = Initial.LastName,
+                Position = Initial.Position,
+                Email = Initial.Email,
+                Phone = Initial.Phone,
+                Notes = Initial.Notes,
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return; // double-click guard
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew
+                ? await ContactService.CreateAsync(CustomerId, _model)
+                : await ContactService.UpdateAsync(ContactId!.Value, _model);
+            Snackbar.Add(IsNew ? $"Contact \"{saved.FullName}\" added." : "Contact saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _serverErrors?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("The contact or customer no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving contact failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

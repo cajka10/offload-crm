@@ -1,0 +1,56 @@
+@* Empty-DB / no-results / error states of a list (D-20.2). *@
+@if (LoadError)
+{
+    <MudAlert Severity="Severity.Error" Class="ma-3" data-testid="load-error">
+        @T("The list could not be loaded. Check your connection and try again.")
+        <MudLink OnClick="OnRetry" Typo="Typo.body2">@T("Try again")</MudLink>
+    </MudAlert>
+}
+else if (IsEmptyDatabase)
+{
+    <div class="list-state" data-testid="empty-state">
+        <MudIcon Icon="@Icon" Size="Size.Large" Class="mb-2 mud-text-secondary" />
+        <MudText>@T(EmptyText)</MudText>
+        @if (CreateText is not null)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OnCreate" Class="mt-3">@T(CreateText)</MudButton>
+        }
+    </div>
+}
+else
+{
+    <div class="list-state" data-testid="no-results">
+        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Class="mb-2 mud-text-secondary" />
+        <MudText>@T(NoResultsText)</MudText>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="OnClearFilters" Class="mt-2" data-testid="clear-filters">@T("Clear filters")</MudButton>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool LoadError { get; set; }
+
+    [Parameter]
+    public bool IsEmptyDatabase { get; set; }
+
+    [Parameter]
+    public string Icon { get; set; } = Icons.Material.Filled.Inbox;
+
+    [Parameter]
+    public string EmptyText { get; set; } = "Nothing here yet.";
+
+    [Parameter]
+    public string NoResultsText { get; set; } = "No matches for your search or filters.";
+
+    [Parameter]
+    public string? CreateText { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreate { get; set; }
+
+    [Parameter]
+    public EventCallback OnClearFilters { get; set; }
+
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+}

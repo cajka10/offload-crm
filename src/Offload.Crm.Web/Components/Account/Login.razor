@@ -1,0 +1,155 @@
+@page "/account/login"
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+@inject ILogger<Login> Logger
+
+<PageTitle>@T("Sign in") · Offload CRM</PageTitle>
+
+<LanguageLinks />
+
+<h1 class="account-title">@T("Sign in")</h1>
+
+@if (Expired && _error is null)
+{
+    <div class="account-info" role="status" data-testid="login-expired">@T("You were signed out. Please sign in again.")</div>
+}
+
+@if (_error is not null)
+{
+    <div class="account-alert" role="alert" data-testid="login-error">@T(_error)</div>
+}
+
+<EditForm Model="Input" method="post" OnSubmit="LoginUserAsync" FormName="login" novalidate>
+
+    <div class="account-field">
+        <label for="email">@T("E-mail")</label>
+        <InputText id="email" @bind-Value="Input.Email" autocomplete="username" autofocus
+                   placeholder="@T("name@company.sk")" data-testid="login-email" />
+        @if (_emailError is not null)
+        {
+            <div class="account-field-error validation-message">@T(_emailError)</div>
+        }
+    </div>
+
+    <div class="account-field">
+        <label for="password">@T("Password")</label>
+        <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="current-password"
+                   data-testid="login-password" />
+        @if (_passwordError is not null)
+        {
+            <div class="account-field-error validation-message">@T(_passwordError)</div>
+        }
+    </div>
+
+    <div class="account-check">
+        <InputCheckbox id="remember" @bind-Value="Input.RememberMe" data-testid="login-remember" />
+        <label for="remember">@T("Remember me")</label>
+    </div>
+
+    <button type="submit" class="account-submit" data-testid="login-submit">@T("Sign in")</button>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private LoginInput Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    /// <summary>Set when a session was ended (logout elsewhere, deactivation); don't bounce back into the app.</summary>
+    [SupplyParameterFromQuery(Name = "expired")]
+    private string? ExpiredFlag { get; set; }
+
+    private bool Expired => ExpiredFlag == "1";
+
+    private string? _error;
+    private string? _emailError;
+    private string? _passwordError;
+
+    protected override void OnInitialized()
+    {
+        // Already signed in: go straight to the app.
+        if (!Expired && HttpMethods.IsGet(HttpContext.Request.Method) && HttpContext.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo(SafeReturnUrl(ReturnUrl), forceLoad: true);
+        }
+    }
+
+    private async Task LoginUserAsync()
+    {
+        // D-29: validated here (not with DataAnnotations) so the messages can be translated.
+        _emailError = string.IsNullOrWhiteSpace(Input.Email) ? "Enter your e-mail." : null;
+        _passwordError = string.IsNullOrEmpty(Input.Password) ? "Enter your password." : null;
+        if (_emailError is not null || _passwordError is not null)
+        {
+            return;
+        }
+
+        var email = Input.Email!.Trim();
+        var result = await SignInManager.PasswordSignInAsync(email, Input.Password!, Input.RememberMe, lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("User {Email} signed in", email);
+            if (await UserManager.FindByEmailAsync(email) is { } user)
+            {
+                user.LastSignInAt = DateTime.UtcNow; // D-24
+                await UserManager.UpdateAsync(user);
+            }
+
+            Navigation.NavigateTo(SafeReturnUrl(ReturnUrl), forceLoad: true);
+            return;
+        }
+
+        if (result.IsLockedOut)
+        {
+            Logger.LogWarning("User {Email} is locked out", email);
+            _error = "Your account is locked after too many failed sign-in attempts. Try again in 5 minutes.";
+        }
+        else if (result.IsNotAllowed && await IsCorrectPasswordAsync(email, Input.Password!))
+        {
+            // Identity checks "can sign in" before the password; only reveal the reason to the real owner.
+            _error = "Your account is deactivated. Contact an administrator.";
+        }
+        else
+        {
+            _error = "Invalid e-mail or password.";
+        }
+
+        Input.Password = null;
+    }
+
+    private async Task<bool> IsCorrectPasswordAsync(string email, string password)
+    {
+        var user = await UserManager.FindByEmailAsync(email);
+        return user is not null && await UserManager.CheckPasswordAsync(user, password);
+    }
+
+    /// <summary>Only local paths are allowed as return URLs (prevents open redirects).</summary>
+    internal static string SafeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl)
+            || !returnUrl.StartsWith('/')
+            || returnUrl.StartsWith("//", StringComparison.Ordinal)
+            || returnUrl.StartsWith("/\\", StringComparison.Ordinal)
+            || returnUrl.StartsWith("/account", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/";
+        }
+
+        return returnUrl;
+    }
+
+    private sealed class LoginInput
+    {
+        public string? Email { get; set; }
+
+        public string? Password { get; set; }
+
+        public bool RememberMe { get; set; }
+    }
+}

@@ -1,0 +1,157 @@
+@inject IActivityService ActivityService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ILogger<ActivityFeed> Logger
+
+@* Newest-first activities of a customer (incl. its projects, D-06) or of a project, with add/edit/delete (T-19/T-20). *@
+<div class="d-flex align-center flex-wrap gap-2 mb-3">
+    <MudText Typo="Typo.h6">@T("Activities")</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@AllLink" data-testid="activities-all">@T("Show all")</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync"
+               data-testid="activity-new">@T("Add activity")</MudButton>
+</div>
+
+@if (_loadError)
+{
+    <MudAlert Severity="Severity.Error" data-testid="load-error">
+        @T("Activities could not be loaded.") <MudLink OnClick="LoadAsync" Typo="Typo.body2">@T("Try again")</MudLink>
+    </MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <div class="list-state" data-testid="activities-empty">
+        <MudIcon Icon="@Icons.Material.Filled.EventNote" Size="Size.Large" Class="mb-2 mud-text-secondary" />
+        <MudText>@T("No activities yet.")</MudText>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="AddAsync" Class="mt-2">@T("Log the first activity")</MudButton>
+    </div>
+}
+else
+{
+    <div data-testid="activity-feed">
+        @foreach (var a in _items)
+        {
+            <div class="timeline-item d-flex gap-2" @key="a.Id" data-testid="activity-item">
+                <MudIcon Icon="@Labels.ActivityIcon(a.Type)" Color="Color.Primary" Size="Size.Small" Class="mt-1" />
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <div class="d-flex flex-wrap gap-2 align-center">
+                        <MudText Typo="Typo.subtitle2">@(a.Subject is null ? Labels.Of(a.Type) : Generated(a.Subject))</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @Labels.Of(a.Type) · @Fmt.DateTimeText(a.Date) · @a.AuthorName
+                            @if (ProjectId is null && a.ProjectName is not null)
+                            {
+                                <span> · <MudLink Href="@($"/projects/{a.ProjectId}")" Typo="Typo.caption">@a.ProjectName</MudLink></span>
+                            }
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Class="pre-wrap text-break">@Generated(a.Description)</MudText>
+                </div>
+                <div class="col-nowrap">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit activity")" OnClick="() => EditAsync(a)" data-testid="activity-edit" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete activity")"
+                                   OnClick="() => DeleteAsync(a)" data-testid="activity-delete" />
+                </div>
+            </div>
+        }
+    </div>
+    @if (_total > _items.Count)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@T("Showing the latest {0} of {1}.", _items.Count, _total) <MudLink Href="@AllLink" Typo="Typo.caption">@T("Show all")</MudLink></MudText>
+    }
+}
+
+@code {
+    private const int Take = 50;
+
+    [Parameter]
+    public int? CustomerId { get; set; }
+
+    [Parameter]
+    public int? ProjectId { get; set; }
+
+    /// <summary>Raised after an add/edit/delete (e.g. to refresh "Last activity").</summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private IReadOnlyList<ActivityDto>? _items;
+    private int _total;
+    private bool _loadError;
+
+    private string AllLink => ProjectId is { } p ? $"/activities?project={p}" : $"/activities?customer={CustomerId}";
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    public async Task LoadAsync()
+    {
+        _loadError = false;
+        try
+        {
+            var result = await ActivityService.ListAsync(new ActivityListQuery { CustomerId = CustomerId, ProjectId = ProjectId, PageSize = Take });
+            _items = result.Items;
+            _total = result.TotalCount;
+        }
+        catch (Exception ex) when (ex is not SessionExpiredException)
+        {
+            Logger.LogError(ex, "Loading activities failed");
+            _loadError = true;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        var parameters = new DialogParameters<ActivityEditDialog>
+        {
+            { x => x.CustomerId, CustomerId },
+            { x => x.ProjectId, ProjectId },
+            { x => x.LockContext, ProjectId is not null },
+        };
+        await ShowAsync(parameters, "New activity");
+    }
+
+    private Task EditAsync(ActivityDto activity) =>
+        ShowAsync(new DialogParameters<ActivityEditDialog> { { x => x.Existing, activity } }, "Edit activity");
+
+    private async Task ShowAsync(DialogParameters<ActivityEditDialog> parameters, string title)
+    {
+        var dialog = await DialogService.ShowAsync<ActivityEditDialog>(title, parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private async Task DeleteAsync(ActivityDto activity)
+    {
+        if (!await DialogService.ConfirmDeleteAsync("Delete activity", $"Delete the activity \"{activity.Subject ?? Labels.Of(activity.Type)}\" from {Fmt.DateTimeText(activity.Date)}?"))
+        {
+            return;
+        }
+
+        try
+        {
+            await ActivityService.DeleteAsync(activity.Id);
+            Snackbar.Add("Activity deleted.", Severity.Success);
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This activity was already deleted.", Severity.Info);
+        }
+        catch (SessionExpiredException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Deleting activity failed");
+            Snackbar.Add("Deleting failed. Please try again.", Severity.Error);
+        }
+
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+}

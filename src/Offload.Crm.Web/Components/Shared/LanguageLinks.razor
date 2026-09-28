@@ -1,0 +1,17 @@
+@inject NavigationManager Navigation
+
+@* D-29: language choice on the static account pages (no MudBlazor interactivity there). *@
+<nav class="account-languages" aria-label="@T("Language")" data-testid="account-languages">
+    @foreach (var (code, name) in AppLanguages.All)
+    {
+        if (code == Text.Language)
+        {
+            <span class="account-language-current" aria-current="true">@name</span>
+        }
+        else
+        {
+            <a href="@($"culture/set?culture={code}&redirectUri={Uri.EscapeDataString("/" + Navigation.ToBaseRelativePath(Navigation.Uri))}")"
+               data-testid="@($"account-language-{code}")">@name</a>
+        }
+    }
+</nav>

@@ -1,0 +1,212 @@
+@inject IProjectService ProjectService
+@inject IProjectStatusService StatusService
+@inject ISnackbar Snackbar
+@inject ILogger<ProjectEditDialog> Logger
+
+<MudDialog data-testid="project-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New project" : "Edit project")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="project-form" EditContext="_editContext" OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true" novalidate>
+            <FormValidator @ref="_validator" />
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">@T("Please fix the highlighted fields.")</MudAlert>
+            }
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Name")" Required="true" @bind-Value="_model.Name" For="@(() => _model.Name)" Counter="200"
+                                  AutoFocus="true" data-testid="project-name" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <CustomerPicker Value="_model.CustomerId" ValueChanged="OnCustomerChanged" Required="true" Label="@T("Customer")"
+                                    Disabled="LockCustomer" ErrorText="@Error(nameof(ProjectInput.CustomerId))" TestId="project-customer" Selected="@(c => _newCustomerName = c?.Name)" />
+                    @if (MovesActivities)
+                    {
+                        @* D-22.4 *@
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2" data-testid="project-customer-change-warning">
+                            @Plural(ActivityCount, "{0} activity will move to", "{0} activities will move to", "{0} aktivita sa presunie k", "{0} aktivity sa presunú k", "{0} aktivít sa presunie k")
+                            @(_newCustomerName ?? T("the selected customer")). @T("The change is logged on the timeline.")
+                        </MudAlert>
+                    }
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="int?" Label="@T("Status")" @bind-Value="_model.StatusId" Error="@(Error(nameof(ProjectInput.StatusId)) is not null)"
+                               ErrorText="@Error(nameof(ProjectInput.StatusId))" data-testid="project-status">
+                        @foreach (var status in _statuses)
+                        {
+                            <MudSelectItem T="int?" Value="@status.Id">@status.Name@(status.IsDefault ? " " + T("(default)") : "")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="Priority" Label="@T("Priority")" @bind-Value="_model.Priority" For="@(() => _model.Priority)" data-testid="project-priority">
+                        @foreach (var p in Enum.GetValues<Priority>())
+                        {
+                            <MudSelectItem T="Priority" Value="@p">@Labels.Of(p)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <UserSelect @bind-Value="_model.ResponsibleUserId" OriginalValue="@Initial?.ResponsibleUserId" Label="@T("Responsible")"
+                                ErrorText="@Error(nameof(ProjectInput.ResponsibleUserId))" TestId="project-responsible" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker Label="@T("Start date")" Date="ToDate(_model.StartDate)" DateChanged="d => SetDate(d, true)" DateFormat="dd.MM.yyyy"
+                                   Clearable="true" Editable="true" data-testid="project-start" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker Label="@T("Target date")" Date="ToDate(_model.TargetDate)" DateChanged="d => SetDate(d, false)" DateFormat="dd.MM.yyyy"
+                                   Clearable="true" Editable="true" Error="@(Error(nameof(ProjectInput.TargetDate)) is not null)"
+                                   ErrorText="@Error(nameof(ProjectInput.TargetDate))" data-testid="project-target" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal?" Label="@T("Estimated value ({0})", AppCulture.CurrencySymbol)" @bind-Value="_model.EstimatedValue" For="@(() => _model.EstimatedValue)"
+                                     Min="0" HideSpinButtons="true" Format="N2" data-testid="project-estimated" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal?" Label="@T("Actual value ({0})", AppCulture.CurrencySymbol)" @bind-Value="_model.ActualValue" For="@(() => _model.ActualValue)"
+                                     Min="0" HideSpinButtons="true" Format="N2" data-testid="project-actual" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Description")" Lines="3" AutoGrow="true" MaxLines="10" Counter="4000"
+                                  @bind-Value="_model.Description" For="@(() => _model.Description)" data-testid="project-description" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Notes")" Lines="2" AutoGrow="true" MaxLines="10" Counter="4000"
+                                  @bind-Value="_model.Notes" For="@(() => _model.Notes)" data-testid="project-notes" />
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="project-form" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                   data-testid="dialog-save">@T("Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Null for a new project.</summary>
+    [Parameter]
+    public int? ProjectId { get; set; }
+
+    [Parameter]
+    public ProjectInput? Initial { get; set; }
+
+    /// <summary>Pre-fills the customer for a new project (from the customer detail page).</summary>
+    [Parameter]
+    public int? CustomerId { get; set; }
+
+    [Parameter]
+    public bool LockCustomer { get; set; }
+
+    /// <summary>Number of the project's activities (they move with a customer change, D-22.4).</summary>
+    [Parameter]
+    public int ActivityCount { get; set; }
+
+    private string? _newCustomerName;
+
+    private bool MovesActivities => !IsNew && ActivityCount > 0 && _model.CustomerId is not null && _model.CustomerId != Initial?.CustomerId;
+
+    private ProjectInput _model = new();
+    private EditContext _editContext = default!;
+    private FormValidator? _validator;
+    private IReadOnlyList<ProjectStatusDto> _statuses = [];
+    private bool _saving;
+    private bool _showSummary;
+
+    private bool IsNew => ProjectId is null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _model = Initial is null ? new ProjectInput { CustomerId = CustomerId } : Clone(Initial);
+        _editContext = new EditContext(_model);
+        _editContext.OnValidationStateChanged += (_, _) => StateHasChanged();
+        _statuses = await StatusService.ListAsync();
+        _model.StatusId ??= _statuses.FirstOrDefault(s => s.IsDefault)?.Id ?? _statuses.FirstOrDefault()?.Id;
+    }
+
+    private string? Error(string field) => _editContext.GetValidationMessages(_editContext.Field(field)).FirstOrDefault();
+
+    private static DateTime? ToDate(DateOnly? d) => d?.ToDateTime(TimeOnly.MinValue);
+
+    private void SetDate(DateTime? value, bool start)
+    {
+        var date = value is null ? (DateOnly?)null : DateOnly.FromDateTime(value.Value);
+        if (start)
+        {
+            _model.StartDate = date;
+        }
+        else
+        {
+            _model.TargetDate = date;
+        }
+
+        _editContext.NotifyFieldChanged(_editContext.Field(nameof(ProjectInput.TargetDate)));
+    }
+
+    private void OnCustomerChanged(int? id)
+    {
+        _model.CustomerId = id;
+        _editContext.NotifyFieldChanged(_editContext.Field(nameof(ProjectInput.CustomerId)));
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew ? await ProjectService.CreateAsync(_model) : await ProjectService.UpdateAsync(ProjectId!.Value, _model);
+            Snackbar.Add(IsNew ? $"Project \"{saved.Name}\" created." : "Project saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _validator?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This project no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving project failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static ProjectInput Clone(ProjectInput p) => new()
+    {
+        Name = p.Name,
+        Description = p.Description,
+        CustomerId = p.CustomerId,
+        StatusId = p.StatusId,
+        Priority = p.Priority,
+        ResponsibleUserId = p.ResponsibleUserId,
+        StartDate = p.StartDate,
+        TargetDate = p.TargetDate,
+        EstimatedValue = p.EstimatedValue,
+        ActualValue = p.ActualValue,
+        Notes = p.Notes,
+    };
+}

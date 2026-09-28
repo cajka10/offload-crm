@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="@Text.Language">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <HeadOutlet @rendermode="PageRenderMode" />
+</head>
+
+<body>
+    <Routes @rendermode="PageRenderMode" />
+
+    <div id="blazor-error-ui">
+        @T("Something went wrong. The page may no longer respond.")
+        <a href="" class="reload">@T("Reload")</a>
+        <a class="dismiss">✕</a>
+    </div>
+
+    <script src="_framework/blazor.web.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+</body>
+
+</html>
+
+@code {
+    // Interactive Server everywhere (D-01), except the account pages, which must run as static SSR
+    // so that sign-in/sign-out can set the auth cookie on a real HTTP response.
+    private static readonly IComponentRenderMode Interactive = new InteractiveServerRenderMode(prerender: false);
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.Request.Path.StartsWithSegments("/account") ? null : Interactive;
+}

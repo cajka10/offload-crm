@@ -1,0 +1,375 @@
+@page "/tasks"
+@inherits ListPageBase<TaskDto>
+@inject ITaskService TaskService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject TimeProvider Clock
+@inject ILogger<TaskListPage> Logger
+
+<PageTitle>@T("Tasks") · Offload CRM</PageTitle>
+
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@T("Tasks")</MudText>
+    <MudSpacer />
+    <MudToggleGroup T="string" Value="@(IsKanban ? "kanban" : "list")" ValueChanged="@(v => SetFilter(ViewKey, v == "kanban" ? "kanban" : null))"
+                    SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary" Size="Size.Small" Outlined="true" data-testid="task-view-toggle">
+        <MudToggleItem Value="@("list")" Text="@T("List")" />
+        <MudToggleItem Value="@("kanban")" Text="@T("Kanban")" />
+    </MudToggleGroup>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync"
+               data-testid="task-new">@T("New task")</MudButton>
+</div>
+
+<MudPaper Class="pa-3 mb-3" Outlined="true" Elevation="0">
+    <div class="d-flex flex-wrap gap-3 align-center">
+        <MudTextField T="string" Value="@SearchText" ValueChanged="SetSearch" Placeholder="@T("Search tasks…")" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" DebounceInterval="350" Immediate="true"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Style="min-width: 200px;" data-testid="task-search" />
+        <MudSelect T="string" Label="@T("Status")" Value="@StatusDisplayValue" ToStringFunc="StatusLabel" ValueChanged="@(v => SetFilter(StatusKey, v == DefaultStatusValue ? null : v))"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 150px; max-width: 190px;" data-testid="task-status-filter">
+            <MudSelectItem T="string" Value="@OpenValue">@T("Open tasks")</MudSelectItem>
+            <MudSelectItem T="string" Value="@AllValue">@T("All statuses")</MudSelectItem>
+            @foreach (var s in Enum.GetValues<TaskItemStatus>())
+            {
+                <MudSelectItem T="string" Value="@s.ToString()">@Labels.Of(s)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="Priority?" Label="@T("Priority")" Value="@_priority" ValueChanged="@(v => SetFilter(PriorityKey, v?.ToString()))"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px; max-width: 180px;" data-testid="task-priority-filter">
+            <MudSelectItem T="Priority?" Value="@((Priority?)null)">@T("All priorities")</MudSelectItem>
+            @foreach (var p in Enum.GetValues<Priority>())
+            {
+                <MudSelectItem T="Priority?" Value="@((Priority?)p)">@Labels.Of(p)</MudSelectItem>
+            }
+        </MudSelect>
+        <UserSelect Value="@_assignee" ValueChanged="@(v => SetFilter(AssigneeKey, v))" Label="@T("Assignee")" IncludeInactive="true"
+                    Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 170px; max-width: 220px;" TestId="task-assignee-filter" ExtraValues="@AssigneeExtraValues">
+            <ExtraOptions>
+                <MudSelectItem T="string" Value="@TaskListQuery.AssigneeMe">@T("Me")</MudSelectItem>
+                <MudSelectItem T="string" Value="@TaskListQuery.AssigneeUnassigned">@T("Unassigned")</MudSelectItem>
+            </ExtraOptions>
+        </UserSelect>
+        <ProjectPicker Value="@_projectId" ValueChanged="@(v => SetFilter(ProjectKey, v?.ToString()))" Label="@T("Project")"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 200px; max-width: 260px;" TestId="task-project-filter" />
+        <MudSwitch T="bool" Value="@_overdue" ValueChanged="@(v => SetFilter(OverdueKey, v ? "true" : null))" Label="@T("Overdue only")"
+                   Color="Color.Error" data-testid="task-overdue-filter" />
+    </div>
+</MudPaper>
+
+@if (Loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" data-testid="loading" />
+}
+
+@if (IsKanban)
+{
+    @if (LoadError)
+    {
+        <ListStateView LoadError="true" OnRetry="ReloadAsync" />
+    }
+    else
+    {
+        @if (_hiddenCount > 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="kanban-cap-notice">
+                @T("{0} more matching tasks are not shown (the board shows at most {1}). Narrow the filters to see them.", _hiddenCount, Offload.Crm.Application.Tasks.TaskService.BoardLimit)
+            </MudAlert>
+        }
+        <MudDropContainer T="TaskDto" @ref="_container" Items="_board" ItemsSelector="@((item, zone) => item.Status.ToString() == zone)"
+                          ItemDropped="OnDroppedAsync" Class="kanban-board" data-testid="kanban">
+            <ChildContent>
+                @foreach (var status in Enum.GetValues<TaskItemStatus>())
+                {
+                    <div class="kanban-column" data-testid="@($"kanban-column-{status}")">
+                        <div class="d-flex align-center mb-2 px-1">
+                            <MudText Typo="Typo.subtitle2">@Labels.Of(status)</MudText>
+                            <MudSpacer />
+                            <MudChip T="string" Size="Size.Small" Class="ma-0" data-testid="kanban-count">@_board.Count(t => t.Status == status)</MudChip>
+                        </div>
+                        <MudDropZone T="TaskDto" Identifier="@status.ToString()" Class="kanban-zone" />
+                        @if (status == TaskItemStatus.Done && _olderDoneCount > 0)
+                        {
+                            @* D-22.1: only the last 30 days are on the board. *@
+                            <MudText Typo="Typo.caption" Class="mt-2 px-1" data-testid="kanban-older-done">
+                                @Plural(_olderDoneCount, "{0} older done task:", "{0} older done tasks:", "{0} staršia hotová úloha:", "{0} staršie hotové úlohy:", "{0} starších hotových úloh:")
+                                <MudLink Href="/tasks?status=Done" Typo="Typo.caption" data-testid="kanban-older-done-link">@T("view in list")</MudLink>
+                            </MudText>
+                        }
+                    </div>
+                }
+            </ChildContent>
+            <ItemRenderer>
+                <MudPaper Class="pa-2 kanban-card" Elevation="1" data-testid="kanban-card">
+                    <div class="d-flex align-start gap-1">
+                        <MudLink Typo="Typo.body2" Class="flex-grow-1 text-break" OnClick="() => EditAsync(context)" data-testid="kanban-card-title">@context.Title</MudLink>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@T("Change status")" data-testid="kanban-card-menu">
+                            @foreach (var s in Enum.GetValues<TaskItemStatus>().Where(s => s != context.Status))
+                            {
+                                <MudMenuItem OnClick="() => MoveAsync(context, s)" data-testid="@($"kanban-move-{s}")">@T("Move to {0}", Labels.Of(s))</MudMenuItem>
+                            }
+                            <MudMenuItem OnClick="() => EditAsync(context)">@T("Edit…")</MudMenuItem>
+                        </MudMenu>
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary text-break d-block">@context.ProjectName · @context.CustomerName</MudText>
+                    <div class="d-flex flex-wrap align-center gap-1 mt-1">
+                        <PriorityChip Priority="context.Priority" />
+                        @if (context.DueDate is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="@(context.IsOverdue(_today) ? "overdue" : null)">@T("Due {0}", Fmt.Date(context.DueDate))</MudText>
+                        }
+                        <MudSpacer />
+                        <MudText Typo="Typo.caption"><UserName Name="@context.AssigneeName" IsActive="context.AssigneeIsActive" EmptyText="@T("Unassigned")" /></MudText>
+                    </div>
+                </MudPaper>
+            </ItemRenderer>
+        </MudDropContainer>
+    }
+}
+else
+{
+    <MudPaper Outlined="true" Elevation="0" Class="list-table" data-testid="task-table">
+        @if (Items.Count == 0 && !Loading)
+        {
+            <ListStateView LoadError="LoadError" IsEmptyDatabase="IsEmptyDatabase" Icon="@Icons.Material.Filled.TaskAlt"
+                           EmptyText="@T("No tasks yet.")" NoResultsText="@T("No tasks match your search or filters.")"
+                           CreateText="@T("New task")" OnCreate="CreateAsync" OnClearFilters="ClearFilters" OnRetry="ReloadAsync" />
+        }
+        else if (Items.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+                <thead>
+                    <tr>
+                        <SortHeader Label="@T("Title")" Key="@TaskSort.Title" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                        <SortHeader Label="@T("Project")" Key="@TaskSort.Project" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-600" />
+                        <SortHeader Label="@T("Customer")" Key="@TaskSort.Customer" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                        <SortHeader Label="@T("Status")" Key="@TaskSort.Status" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                        <SortHeader Label="@T("Priority")" Key="@TaskSort.Priority" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-960" />
+                        <SortHeader Label="@T("Assignee")" Key="@TaskSort.Assignee" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1280" />
+                        <SortHeader Label="@T("Due")" Key="@TaskSort.Due" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-600" />
+                        <SortHeader Label="@T("Created")" Key="@TaskSort.Created" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                        <th class="col-actions">@T("Actions")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Items)
+                    {
+                        <tr @key="t.Id" data-testid="task-row">
+                            <td><MudLink Typo="Typo.body2" Class="clamp-2" title="@t.Title" OnClick="() => EditAsync(t)" data-testid="task-link">@t.Title</MudLink></td>
+                            <td class="hide-lt-600"><MudLink Href="@($"/projects/{t.ProjectId}")" Typo="Typo.body2" Class="clamp-2" title="@t.ProjectName">@t.ProjectName</MudLink></td>
+                            <td class="hide-lt-1440"><MudLink Href="@($"/customers/{t.CustomerId}")" Typo="Typo.body2" Class="clamp-2">@t.CustomerName</MudLink></td>
+                            <td style="min-width: 140px;"><TaskStatusSelect Status="t.Status" StatusChanged="s => ChangeStatusAsync(t, s)" /></td>
+                            <td class="hide-lt-960"><PriorityChip Priority="t.Priority" /></td>
+                            <td class="hide-lt-1280"><UserName Name="@t.AssigneeName" IsActive="t.AssigneeIsActive" EmptyText="@T("Unassigned")" /></td>
+                            <td class="hide-lt-600 col-nowrap">
+                                <span class="@(t.IsOverdue(_today) ? "overdue" : null)" data-testid="@(t.IsOverdue(_today) ? "overdue" : null)">@Fmt.Date(t.DueDate)</span>
+                            </td>
+                            <td class="hide-lt-1440 col-nowrap">@Fmt.Date(t.CreatedAt)</td>
+                            <td class="col-actions">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit task")" OnClick="() => EditAsync(t)" data-testid="task-edit" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete task")"
+                                               OnClick="() => DeleteAsync(t)" data-testid="task-delete" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+
+        <ListPager Page="State.Page" PageSize="State.PageSize" TotalCount="TotalCount" OnPageChanged="GoToPage" OnPageSizeChanged="SetPageSize" />
+    </MudPaper>
+}
+
+@code {
+    private const string StatusKey = "status";
+    private const string PriorityKey = "priority";
+    private const string AssigneeKey = "assignee";
+    private const string ProjectKey = "project";
+    private const string OverdueKey = "overdue";
+    private const string ViewKey = "view";
+    private const string OpenValue = "open";
+    private const string AllValue = "all";
+    private static readonly string[] AssigneeExtraValues = [TaskListQuery.AssigneeMe, TaskListQuery.AssigneeUnassigned];
+
+    private MudDropContainer<TaskDto>? _container;
+    private List<TaskDto> _board = [];
+    private string? _statusRaw;
+    private int _olderDoneCount;
+    private int _hiddenCount;
+    private Priority? _priority;
+    private string? _assignee;
+    private int? _projectId;
+    private bool _overdue;
+    private DateOnly _today;
+    private bool _refreshBoard;
+
+    private bool IsKanban => State.Filter(ViewKey) == "kanban";
+
+    protected override IEnumerable<string> FilterKeys => [StatusKey, PriorityKey, AssigneeKey, ProjectKey, OverdueKey, ViewKey];
+
+    protected override string DefaultSort => TaskSort.Due;
+
+    protected override void OnStateLoaded()
+    {
+        _today = AppTime.Today(Clock);
+        var status = State.Filter(StatusKey);
+        _statusRaw = status is null ? null
+            : status.Equals(AllValue, StringComparison.OrdinalIgnoreCase) ? AllValue
+            : status.Equals(OpenValue, StringComparison.OrdinalIgnoreCase) ? OpenValue
+            : Enum.TryParse<TaskItemStatus>(status, true, out var s) && Enum.IsDefined(s) ? s.ToString() : null;
+        _priority = Enum.TryParse<Priority>(State.Filter(PriorityKey), true, out var p) && Enum.IsDefined(p) ? p : null;
+        _assignee = State.Filter(AssigneeKey);
+        _projectId = State.IntFilter(ProjectKey);
+        _overdue = State.Filter(OverdueKey) == "true";
+    }
+
+    /// <summary>
+    /// Without a status in the URL the list shows open tasks and the Kanban all statuses (Done: last 30 days only,
+    /// D-22.1). The control shows that effective default (BUG-024); picking it again removes the parameter.
+    /// </summary>
+    private string DefaultStatusValue => IsKanban ? AllValue : OpenValue;
+
+    private string StatusDisplayValue => _statusRaw ?? DefaultStatusValue;
+
+    private static string StatusLabel(string? value) => value switch
+    {
+        OpenValue => T("Open tasks"),
+        AllValue => T("All statuses"),
+        null => string.Empty,
+        var s => Enum.TryParse<TaskItemStatus>(s, out var status) ? Labels.Of(status) : s,
+    };
+
+    private IReadOnlyList<TaskItemStatus>? StatusesForQuery() => StatusDisplayValue switch
+    {
+        AllValue => null,
+        OpenValue => TaskListQuery.OpenStatuses,
+        var one => [Enum.Parse<TaskItemStatus>(one)],
+    };
+
+    private bool MatchesStatusFilter(TaskItemStatus status) => StatusesForQuery() is not { } statuses || statuses.Contains(status);
+
+    private TaskListQuery BuildQuery(ListState state) => new()
+    {
+        Search = state.Search,
+        Statuses = StatusesForQuery(),
+        Priority = _priority,
+        Assignee = _assignee,
+        ProjectId = _projectId,
+        OverdueOnly = _overdue,
+        Sort = EffectiveSort,
+        Descending = EffectiveDescending,
+        Page = state.Page,
+        PageSize = state.PageSize,
+    };
+
+    protected override async Task<PagedResult<TaskDto>> FetchAsync(ListState state, CancellationToken ct)
+    {
+        if (!IsKanban)
+        {
+            return await TaskService.ListAsync(BuildQuery(state), ct);
+        }
+
+        var query = BuildQuery(state);
+        query.Sort = null; // board order: priority (Critical first), then due date
+        var board = await TaskService.GetBoardAsync(query, recentDoneOnly: _statusRaw is null, ct);
+        _board = board.Tasks.ToList();
+        _olderDoneCount = board.OlderDoneCount;
+        _hiddenCount = board.HiddenCount;
+        _refreshBoard = true;
+        return new PagedResult<TaskDto>(_board, _board.Count, 1, Math.Max(1, _board.Count));
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // MudDropContainer re-reads its items only on Refresh(), after the new list has been rendered.
+        if (_refreshBoard && _container is not null)
+        {
+            _refreshBoard = false;
+            _container.Refresh();
+        }
+    }
+
+    protected override async Task<bool> IsDatabaseEmptyAsync(CancellationToken ct) =>
+        (await TaskService.ListAsync(new TaskListQuery { PageSize = 1 }, ct)).TotalCount == 0;
+
+    private async Task OnDroppedAsync(MudItemDropInfo<TaskDto> drop)
+    {
+        if (drop.Item is null || !Enum.TryParse<TaskItemStatus>(drop.DropzoneIdentifier, out var status))
+        {
+            return;
+        }
+
+        await MoveAsync(drop.Item, status);
+    }
+
+    /// <summary>Optimistic move; reverts with an error snackbar when saving fails (T-18).</summary>
+    private async Task MoveAsync(TaskDto task, TaskItemStatus status)
+    {
+        if (task.Status == status)
+        {
+            return;
+        }
+
+        Replace(task with { Status = status });
+        if (!await TaskActions.ChangeStatusAsync(TaskService, Snackbar, Logger, task, status))
+        {
+            Replace(task);
+        }
+        else if (!MatchesStatusFilter(status))
+        {
+            // BUG-024: the card no longer matches the status filter -> it leaves the board.
+            _board.RemoveAll(t => t.Id == task.Id);
+            _container?.Refresh();
+            StateHasChanged();
+        }
+    }
+
+    private void Replace(TaskDto task)
+    {
+        var index = _board.FindIndex(t => t.Id == task.Id);
+        if (index >= 0)
+        {
+            _board[index] = task;
+        }
+
+        _container?.Refresh();
+        StateHasChanged();
+    }
+
+    private async Task ChangeStatusAsync(TaskDto task, TaskItemStatus status)
+    {
+        await TaskActions.ChangeStatusAsync(TaskService, Snackbar, Logger, task, status);
+        await ReloadAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        var parameters = new DialogParameters<TaskEditDialog> { { x => x.ProjectId, _projectId } };
+        var dialog = await DialogService.ShowAsync<TaskEditDialog>("New task", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await ReloadAsync();
+        }
+    }
+
+    private async Task EditAsync(TaskDto task)
+    {
+        var parameters = new DialogParameters<TaskEditDialog>
+        {
+            { x => x.TaskId, task.Id },
+            { x => x.Initial, TaskInput.From(task) },
+        };
+        var dialog = await DialogService.ShowAsync<TaskEditDialog>("Edit task", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await ReloadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(TaskDto task)
+    {
+        if (await TaskActions.DeleteAsync(TaskService, DialogService, Snackbar, Logger, task))
+        {
+            await ReloadAsync();
+        }
+    }
+}

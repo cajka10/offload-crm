@@ -1,0 +1,264 @@
+@page "/projects"
+@inherits ListPageBase<ProjectListItem>
+@inject IProjectService ProjectService
+@inject IProjectStatusService StatusService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject TimeProvider Clock
+@inject ILogger<ProjectListPage> Logger
+
+<PageTitle>@T("Projects") · Offload CRM</PageTitle>
+
+<div class="d-flex align-center flex-wrap gap-2 mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@T("Projects")</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="CreateAsync" data-testid="project-new">@T("New project")</MudButton>
+</div>
+
+<MudPaper Class="pa-3 mb-3" Outlined="true" Elevation="0">
+    <div class="d-flex flex-wrap gap-3 align-center">
+        <MudTextField T="string" Value="@SearchText" ValueChanged="SetSearch" Placeholder="@T("Search project or customer…")" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" DebounceInterval="350" Immediate="true"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Style="min-width: 220px;" data-testid="project-search" />
+        <MudSelect T="int" Label="@T("Status")" MultiSelection="true" SelectedValues="_statusIds" SelectedValuesChanged="OnStatusesChanged"
+                   MultiSelectionTextFunc="StatusText" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                   Style="min-width: 180px; max-width: 260px;" data-testid="project-status-filter">
+            @foreach (var s in _statuses)
+            {
+                <MudSelectItem T="int" Value="@s.Id">@s.Name</MudSelectItem>
+            }
+            @foreach (var unknown in UnknownStatusIds)
+            {
+                @* BUG-021: a deep-linked id that doesn't exist is shown (and can be unticked or cleared). *@
+                <MudSelectItem T="int" Value="@unknown">@T("Unknown status #{0}", unknown)</MudSelectItem>
+            }
+        </MudSelect>
+        <CustomerPicker Value="@_customerId" ValueChanged="@(v => SetFilter(CustomerKey, v?.ToString()))" Label="@T("Customer")"
+                        Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 200px; max-width: 260px;" TestId="project-customer-filter" />
+        <MudSelect T="Priority?" Label="@T("Priority")" Value="@_priority" ValueChanged="@(v => SetFilter(PriorityKey, v?.ToString()))"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px; max-width: 180px;" data-testid="project-priority-filter">
+            <MudSelectItem T="Priority?" Value="@((Priority?)null)">@T("All priorities")</MudSelectItem>
+            @foreach (var p in Enum.GetValues<Priority>())
+            {
+                <MudSelectItem T="Priority?" Value="@((Priority?)p)">@Labels.Of(p)</MudSelectItem>
+            }
+        </MudSelect>
+        <UserSelect Value="@_responsible" ValueChanged="@(v => SetFilter(ResponsibleKey, v))" Label="@T("Responsible")" IncludeInactive="true"
+                    Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 170px; max-width: 220px;" TestId="project-responsible-filter" />
+        <MudTooltip Text="@T(_statusIds.Count > 0 ? "Not applied: the selected statuses are shown as chosen" : "Hide projects in inactive or closed statuses")">
+            <MudSwitch T="bool" Value="@(_activeOnly && _statusIds.Count == 0)" ValueChanged="@(v => SetFilter(ActiveKey, v ? null : "false"))"
+                       Label="@T("Active only")" Disabled="@(_statusIds.Count > 0)" Color="Color.Primary" data-testid="project-active-only" />
+        </MudTooltip>
+    </div>
+</MudPaper>
+
+<MudPaper Outlined="true" Elevation="0" Class="list-table" data-testid="project-table">
+    @if (Loading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" data-testid="loading" />
+    }
+
+    @if (Items.Count == 0 && !Loading)
+    {
+        <ListStateView LoadError="LoadError" IsEmptyDatabase="IsEmptyDatabase" Icon="@Icons.Material.Filled.Work"
+                       EmptyText="@T("No projects yet.")" NoResultsText="@T("No projects match your search or filters.")"
+                       CreateText="@T("New project")" OnCreate="CreateAsync" OnClearFilters="ClearFilters" OnRetry="ReloadAsync" />
+    }
+    else if (Items.Count > 0)
+    {
+        var today = AppTime.Today(Clock);
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+            <thead>
+                <tr>
+                    <SortHeader Label="@T("Name")" Key="@ProjectSort.Name" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                    <SortHeader Label="@T("Customer")" Key="@ProjectSort.Customer" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-600" />
+                    <SortHeader Label="@T("Status")" Key="@ProjectSort.Status" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" />
+                    <SortHeader Label="@T("Priority")" Key="@ProjectSort.Priority" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-960" />
+                    <SortHeader Label="@T("Responsible")" Key="@ProjectSort.Responsible" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1280" />
+                    <SortHeader Label="@T("Start")" Key="@ProjectSort.Start" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1440" />
+                    <SortHeader Label="@T("Target")" Key="@ProjectSort.Target" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-600" />
+                    <SortHeader Label="@T("Est. value")" Key="@ProjectSort.EstimatedValue" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-1280" Align="right" />
+                    <SortHeader Label="@T("Open tasks")" Key="@ProjectSort.OpenTasks" CurrentSort="@EffectiveSort" Descending="EffectiveDescending" OnSort="SortBy" Class="hide-lt-960" Align="right" />
+                    <th class="col-actions">@T("Actions")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Items)
+                {
+                    <tr @key="p.Id">
+                        <td><MudLink Href="@($"/projects/{p.Id}")" Typo="Typo.body2" Class="clamp-2" title="@p.Name" data-testid="project-link">@p.Name</MudLink></td>
+                        <td class="hide-lt-600"><MudLink Href="@($"/customers/{p.CustomerId}")" Typo="Typo.body2" Class="clamp-2" title="@p.CustomerName">@p.CustomerName</MudLink></td>
+                        <td><ProjectStatusChip Name="@p.StatusName" Color="@p.StatusColor" /></td>
+                        <td class="hide-lt-960"><PriorityChip Priority="p.Priority" /></td>
+                        <td class="hide-lt-1280"><UserName Name="@p.ResponsibleName" IsActive="p.ResponsibleIsActive" /></td>
+                        <td class="hide-lt-1440 col-nowrap">@Fmt.Date(p.StartDate)</td>
+                        <td class="hide-lt-600 col-nowrap">
+                            <span class="@(p.IsOverdue(today) ? "overdue" : null)" title="@(p.IsOverdue(today) ? T("Overdue") : null)"
+                                  data-testid="@(p.IsOverdue(today) ? "overdue" : null)">@Fmt.Date(p.TargetDate)</span>
+                        </td>
+                        <td class="hide-lt-1280 col-nowrap" style="text-align: right;">@Fmt.Money(p.EstimatedValue)</td>
+                        <td class="hide-lt-960" style="text-align: right;">@p.OpenTaskCount</td>
+                        <td class="col-actions">
+                            <MudTooltip Text="@T("Edit")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@T("Edit project")"
+                                               OnClick="() => EditAsync(p.Id)" data-testid="project-edit" />
+                            </MudTooltip>
+                            <MudTooltip Text="@T("Delete")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="@T("Delete project")"
+                                               OnClick="() => DeleteAsync(p)" data-testid="project-delete" />
+                            </MudTooltip>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+
+    <ListPager Page="State.Page" PageSize="State.PageSize" TotalCount="TotalCount" OnPageChanged="GoToPage" OnPageSizeChanged="SetPageSize" />
+</MudPaper>
+
+@code {
+    private const string StatusKey = "status";
+    private const string CustomerKey = "customer";
+    private const string PriorityKey = "priority";
+    private const string ResponsibleKey = "responsible";
+    private const string ActiveKey = "active";
+
+    private IReadOnlyList<ProjectStatusDto> _statuses = [];
+    private HashSet<int> _statusIds = [];
+    private int? _customerId;
+    private Priority? _priority;
+    private string? _responsible;
+    private bool _activeOnly = true;
+
+    protected override IEnumerable<string> FilterKeys => [StatusKey, CustomerKey, PriorityKey, ResponsibleKey, ActiveKey];
+
+    protected override string DefaultSort => ProjectSort.Name;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Before the first render so a deep-linked status shows its name; failures are handled by the list (BUG-023).
+            _statuses = await StatusService.ListAsync();
+        }
+        catch (Exception ex) when (ex is not SessionExpiredException)
+        {
+            Logger.LogWarning(ex, "Loading project statuses failed");
+        }
+
+        await base.OnInitializedAsync();
+    }
+
+    protected override void OnStateLoaded()
+    {
+        var ids = ParseIds(State.Filter(StatusKey));
+        if (!ids.SetEquals(_statusIds))
+        {
+            // BUG-016: only hand MudSelect a new set when the selection really changed; a fresh (but equal) set on
+            // every URL change makes it re-raise SelectedValuesChanged and the two states chase each other.
+            _statusIds = ids;
+        }
+
+        _customerId = State.IntFilter(CustomerKey);
+        _priority = Enum.TryParse<Priority>(State.Filter(PriorityKey), true, out var p) && Enum.IsDefined(p) ? p : null;
+        _responsible = State.Filter(ResponsibleKey);
+        _activeOnly = !string.Equals(State.Filter(ActiveKey), "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    protected override async Task<PagedResult<ProjectListItem>> FetchAsync(ListState state, CancellationToken ct)
+    {
+        if (_statuses.Count == 0)
+        {
+            _statuses = await StatusService.ListAsync(ct); // inside the list's error handling (BUG-023)
+        }
+
+        return await ProjectService.ListAsync(
+            new ProjectListQuery
+            {
+                Search = state.Search,
+                StatusIds = _statusIds.ToList(),
+                CustomerId = _customerId,
+                Priority = _priority,
+                ResponsibleUserId = _responsible,
+                ActiveOnly = _activeOnly,
+                Sort = EffectiveSort,
+                Descending = EffectiveDescending,
+                Page = state.Page,
+                PageSize = state.PageSize,
+            },
+            ct);
+    }
+
+    protected override async Task<bool> IsDatabaseEmptyAsync(CancellationToken ct) =>
+        (await ProjectService.ListAsync(new ProjectListQuery { ActiveOnly = false, PageSize = 1 }, ct)).TotalCount == 0;
+
+    private IEnumerable<int> UnknownStatusIds => _statusIds.Where(id => _statuses.Count > 0 && _statuses.All(s => s.Id != id)).OrderBy(id => id);
+
+    private static HashSet<int> ParseIds(string? value) => (value ?? string.Empty)
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(s => int.TryParse(s, out var id) ? id : 0)
+        .Where(id => id > 0)
+        .ToHashSet();
+
+    private string StatusText(List<string> values)
+    {
+        var names = _statuses.Where(s => _statusIds.Contains(s.Id)).Select(s => s.Name)
+            .Concat(UnknownStatusIds.Select(id => T("Unknown status #{0}", id))).ToList();
+        return names.Count <= 2 ? string.Join(", ", names) : Plural(names.Count, "{0} status", "{0} statuses", "{0} stav", "{0} stavy", "{0} stavov");
+    }
+
+    private void OnStatusesChanged(IEnumerable<int>? ids)
+    {
+        var selected = (ids ?? []).ToHashSet();
+        if (selected.SetEquals(_statusIds))
+        {
+            return; // no real change: don't navigate (BUG-016)
+        }
+
+        _statusIds = selected;
+        SetFilter(StatusKey, selected.Count > 0 ? string.Join(',', selected.Order()) : null);
+    }
+
+    private async Task CreateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ProjectEditDialog>("New project", DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false, Data: ProjectDetail created })
+        {
+            Navigation.NavigateTo($"/projects/{created.Id}");
+        }
+    }
+
+    private async Task EditAsync(int id)
+    {
+        try
+        {
+            var project = await ProjectService.GetAsync(id);
+            var parameters = new DialogParameters<ProjectEditDialog>
+            {
+                { x => x.ProjectId, id },
+                { x => x.Initial, ProjectInput.From(project) },
+                { x => x.ActivityCount, project.ActivityCount },
+            };
+            var dialog = await DialogService.ShowAsync<ProjectEditDialog>("Edit project", parameters, DialogExtensions.FormOptions());
+            if (await dialog.Result is { Canceled: false })
+            {
+                await ReloadAsync();
+            }
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This project no longer exists.", Severity.Warning);
+            await ReloadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(ProjectListItem project)
+    {
+        if (await ProjectActions.DeleteAsync(project.Id, project.Name, ProjectService, DialogService, Snackbar, Logger))
+        {
+            await ReloadAsync();
+        }
+    }
+}

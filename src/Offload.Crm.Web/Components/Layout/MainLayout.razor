@@ -1,0 +1,133 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject Offload.Crm.Infrastructure.Persistence.DatabaseSelector Databases
+@implements IDisposable
+
+<MudThemeProvider Theme="AppTheme.Theme" />
+<MudPopoverProvider />
+<MudDialogProvider CloseOnEscapeKey="true" BackdropClick="false" />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Dense="false">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="ToggleDrawer" aria-label="@T("Toggle navigation")" data-testid="nav-toggle" />
+        <MudLink Href="/" Color="Color.Inherit" Underline="Underline.None" Class="d-flex align-center ml-2 brand">
+            <MudIcon Icon="@Icons.Material.Filled.Hub" Class="mr-2" />
+            <MudText Typo="Typo.h6">Offload CRM</MudText>
+        </MudLink>
+        @if (_database == Offload.Crm.Infrastructure.Persistence.DatabaseTarget.Test)
+        {
+            @* D-26: always visible while the app works on the test database. *@
+            <MudTooltip Text="@T("The application uses the test database ({0}). Switch back in Settings → Database.", Databases.GetDatabaseName(_database))">
+                <MudChip T="string" Href="/settings" Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Small"
+                         Icon="@Icons.Material.Filled.Science" Class="ml-3 test-db-badge" data-testid="test-db-badge">@T("TEST DATABASE")</MudChip>
+            </MudTooltip>
+        }
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AriaLabel="@T("Account")" data-testid="user-menu">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Key" OnClick="ChangePasswordAsync" data-testid="change-password">@T("Change password")</MudMenuItem>
+                </MudMenu>
+                <MudText Typo="Typo.body2" Class="mr-3 d-none d-sm-flex" data-testid="current-user">
+                    @(context.User.FindFirst(Offload.Crm.Web.Auth.AppClaimsPrincipalFactory.FullNameClaim)?.Value ?? context.User.Identity?.Name)
+                </MudText>
+                @* D-29: UI language (cookie), next to the user name. *@
+                <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="mr-3" data-testid="language-menu">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Text" Color="Color.Inherit" Size="Size.Small" StartIcon="@Icons.Material.Filled.Translate"
+                                   EndIcon="@Icons.Material.Filled.ArrowDropDown" aria-label="@T("Language")" data-testid="language-current">
+                            @Text.Language.ToUpperInvariant()
+                        </MudButton>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @foreach (var (code, name) in AppLanguages.All)
+                        {
+                            <MudMenuItem OnClick="() => SetLanguage(code)" Icon="@(code == Text.Language ? Icons.Material.Filled.Check : null)"
+                                         data-testid="@($"language-{code}")">@name</MudMenuItem>
+                        }
+                    </ChildContent>
+                </MudMenu>
+                @* Same-origin POST with antiforgery token to the static SSR logout page (D-19). *@
+                <form method="post" action="account/logout" class="d-flex" data-testid="logout-form">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="_handler" value="logout" />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Logout" data-testid="logout">@T("Logout")</MudButton>
+                </form>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1"
+               Variant="@DrawerVariant.Responsive" Breakpoint="Breakpoint.Md">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4 px-4">
+            <ErrorBoundary @ref="_errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent>
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="my-4" data-testid="error-boundary">
+                        <MudText Typo="Typo.h6">@T("Something went wrong")</MudText>
+                        <MudText Class="mb-2">@T("An unexpected error occurred while showing this page. It has been logged.")</MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Recover">@T("Try again")</MudButton>
+                    </MudAlert>
+                </ErrorContent>
+            </ErrorBoundary>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private ErrorBoundary? _errorBoundary;
+    private Offload.Crm.Infrastructure.Persistence.DatabaseTarget _database;
+
+    protected override void OnInitialized()
+    {
+        _database = Databases.Current;
+        Databases.Changed += OnDatabaseChanged;
+    }
+
+    // D-26: another user (or tab) switched the database — reload so this tab works on the new one.
+    private void OnDatabaseChanged(Offload.Crm.Infrastructure.Persistence.DatabaseTarget target) =>
+        _ = InvokeAsync(() =>
+        {
+            try
+            {
+                Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+            }
+            catch (Exception)
+            {
+                // The circuit is already disconnected; the next page load uses the new database anyway.
+            }
+        });
+
+    public void Dispose() => Databases.Changed -= OnDatabaseChanged;
+
+    protected override void OnParametersSet()
+    {
+        // Navigating to another page clears a previous error.
+        _errorBoundary?.Recover();
+    }
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private Task ChangePasswordAsync() =>
+        DialogService.ShowAsync<Offload.Crm.Web.Components.Pages.Settings.PasswordDialog>(T("Change password"), DialogExtensions.FormOptions(MaxWidth.Small));
+
+    // D-29: the language cookie is set by /culture/set; a full reload starts a circuit in the new language.
+    private void SetLanguage(string code) =>
+        Navigation.NavigateTo($"culture/set?culture={code}&redirectUri={Uri.EscapeDataString("/" + Navigation.ToBaseRelativePath(Navigation.Uri))}", forceLoad: true);
+
+    private void Recover()
+    {
+        _errorBoundary?.Recover();
+    }
+}

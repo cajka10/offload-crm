@@ -1,0 +1,152 @@
+@inject ITaskService TaskService
+@inject ISnackbar Snackbar
+@inject ILogger<TaskEditDialog> Logger
+
+<MudDialog data-testid="task-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@T(IsNew ? "New task" : "Edit task")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm id="task-form" EditContext="_editContext" OnValidSubmit="SaveAsync" OnInvalidSubmit="() => _showSummary = true" novalidate>
+            <FormValidator @ref="_validator" />
+            @if (_showSummary)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3" data-testid="form-error-summary">@T("Please fix the highlighted fields.")</MudAlert>
+            }
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Title")" Required="true" @bind-Value="_model.Title" For="@(() => _model.Title)" Counter="200"
+                                  AutoFocus="true" data-testid="task-title" />
+                </MudItem>
+                <MudItem xs="12">
+                    <ProjectPicker Value="_model.ProjectId" ValueChanged="OnProjectChanged" Required="true" Disabled="LockProject"
+                                   ErrorText="@Error(nameof(TaskInput.ProjectId))" TestId="task-project" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="TaskItemStatus" Label="@T("Status")" @bind-Value="_model.Status" For="@(() => _model.Status)" data-testid="task-status">
+                        @foreach (var s in Enum.GetValues<TaskItemStatus>())
+                        {
+                            <MudSelectItem T="TaskItemStatus" Value="@s">@Labels.Of(s)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="Priority" Label="@T("Priority")" @bind-Value="_model.Priority" For="@(() => _model.Priority)" data-testid="task-priority">
+                        @foreach (var p in Enum.GetValues<Priority>())
+                        {
+                            <MudSelectItem T="Priority" Value="@p">@Labels.Of(p)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <UserSelect @bind-Value="_model.AssignedUserId" OriginalValue="@Initial?.AssignedUserId" Label="@T("Assignee")"
+                                ErrorText="@Error(nameof(TaskInput.AssignedUserId))" TestId="task-assignee" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker Label="@T("Due date")" Date="@(_model.DueDate?.ToDateTime(TimeOnly.MinValue))"
+                                   DateChanged="@(d => _model.DueDate = d is null ? null : DateOnly.FromDateTime(d.Value))"
+                                   DateFormat="dd.MM.yyyy" Clearable="true" Editable="true" data-testid="task-due" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="@T("Description")" Lines="4" AutoGrow="true" MaxLines="12" Counter="4000"
+                                  @bind-Value="_model.Description" For="@(() => _model.Description)" data-testid="task-description" />
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()" Disabled="_saving" data-testid="dialog-cancel">@T("Cancel")</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="task-form" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                   data-testid="dialog-save">@T("Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int? TaskId { get; set; }
+
+    [Parameter]
+    public TaskInput? Initial { get; set; }
+
+    [Parameter]
+    public int? ProjectId { get; set; }
+
+    [Parameter]
+    public bool LockProject { get; set; }
+
+    private TaskInput _model = new();
+    private EditContext _editContext = default!;
+    private FormValidator? _validator;
+    private bool _saving;
+    private bool _showSummary;
+
+    private bool IsNew => TaskId is null;
+
+    protected override void OnInitialized()
+    {
+        _model = Initial is null
+            ? new TaskInput { ProjectId = ProjectId }
+            : new TaskInput
+            {
+                Title = Initial.Title,
+                Description = Initial.Description,
+                ProjectId = Initial.ProjectId,
+                Status = Initial.Status,
+                Priority = Initial.Priority,
+                AssignedUserId = Initial.AssignedUserId,
+                DueDate = Initial.DueDate,
+            };
+        _editContext = new EditContext(_model);
+        _editContext.OnValidationStateChanged += (_, _) => StateHasChanged();
+    }
+
+    private string? Error(string field) => _editContext.GetValidationMessages(_editContext.Field(field)).FirstOrDefault();
+
+    private void OnProjectChanged(int? id)
+    {
+        _model.ProjectId = id;
+        _editContext.NotifyFieldChanged(_editContext.Field(nameof(TaskInput.ProjectId)));
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _showSummary = false;
+        try
+        {
+            var saved = IsNew ? await TaskService.CreateAsync(_model) : await TaskService.UpdateAsync(TaskId!.Value, _model);
+            Snackbar.Add(IsNew ? "Task created." : "Task saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (AppValidationException ex)
+        {
+            _validator?.Show(ex.Errors);
+            _showSummary = true;
+        }
+        catch (NotFoundException)
+        {
+            Snackbar.Add("This task no longer exists.", Severity.Error);
+            MudDialog.Cancel();
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving task failed");
+            Snackbar.Add("Saving failed. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

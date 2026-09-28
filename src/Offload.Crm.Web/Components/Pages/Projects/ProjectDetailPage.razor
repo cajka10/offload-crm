@@ -1,0 +1,329 @@
+@page "/projects/{Id:int}"
+@using Offload.Crm.Web.Components.Pages.Activities
+@using Offload.Crm.Web.Components.Pages.Tasks
+@inject IProjectService ProjectService
+@inject IProjectStatusService StatusService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject ListLocations ListLocations
+@inject TimeProvider Clock
+@inject ILogger<ProjectDetailPage> Logger
+
+<PageTitle>@(_project?.Name ?? T("Project")) · Offload CRM</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="px-0 pt-0" />
+
+@if (_loading)
+{
+    <MudPaper Class="pa-4" Outlined="true" Elevation="0" data-testid="loading">
+        <MudSkeleton Width="40%" Height="48px" />
+        <MudSkeleton Width="25%" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="220px" Class="mt-4" />
+    </MudPaper>
+}
+else if (_notFound)
+{
+    <NotFoundContent Title="@T("Project not found")" Message="@T("Project #{0} doesn't exist or has been deleted.", Id)"
+                     BackHref="/projects" BackText="@T("Back to projects")" />
+}
+else if (_loadError || _project is null)
+{
+    <MudAlert Severity="Severity.Error" data-testid="load-error">
+        @T("The project could not be loaded.") <MudLink OnClick="LoadAsync" Typo="Typo.body2">@T("Try again")</MudLink>
+    </MudAlert>
+}
+else
+{
+    var p = _project;
+    var today = AppTime.Today(Clock);
+    <MudPaper Class="pa-4 mb-4" Outlined="true" Elevation="0">
+        <div class="d-flex flex-wrap align-center gap-3">
+            <div class="flex-grow-1" style="min-width: 0;">
+                <div class="d-flex align-center flex-wrap gap-2">
+                    <MudText Typo="Typo.h4" HtmlTag="h1" Class="text-break" data-testid="project-name">@p.Name</MudText>
+                    <PriorityChip Priority="p.Priority" />
+                </div>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                    <MudLink Href="@($"/customers/{p.CustomerId}")" Typo="Typo.body2" data-testid="project-customer-link">@p.CustomerName</MudLink>
+                    · @T("Responsible"): <UserName Name="@p.ResponsibleName" IsActive="p.ResponsibleIsActive" EmptyText="@T("nobody")" />
+                    · @Fmt.Date(p.StartDate) → <span class="@(p.IsOverdue(today) ? "overdue" : null)">@Fmt.Date(p.TargetDate)</span>
+                </MudText>
+            </div>
+            <div style="min-width: 180px;">
+                <MudSelect T="int" Label="@T("Status")" Value="p.StatusId" ValueChanged="ChangeStatusAsync" Variant="Variant.Outlined"
+                           Margin="Margin.Dense" Disabled="_busy" data-testid="project-status-inline">
+                    @foreach (var s in _statuses)
+                    {
+                        <MudSelectItem T="int" Value="@s.Id">@s.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                @* T-26 quick actions (status: the select next to them) *@
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.AddTask"
+                           OnClick="AddTaskAsync" data-testid="quick-add-task">@T("Add task")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.EventNote"
+                           OnClick="LogActivityAsync" data-testid="quick-log-activity">@T("Log activity")</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditAsync"
+                           data-testid="project-edit">@T("Edit")</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync"
+                           data-testid="project-delete">@T("Delete")</MudButton>
+            </div>
+        </div>
+        @{ var done = p.TaskCount - p.OpenTaskCount; }
+        <div class="summary-row mt-3 align-center" data-testid="project-summary">
+            <div class="summary-item" style="min-width: 200px;">
+                <span class="summary-value" data-testid="project-progress">@T("{0} / {1} tasks done", done, p.TaskCount)</span>
+                <MudProgressLinear Color="Color.Primary" Value="@(p.TaskCount == 0 ? 0 : done * 100.0 / p.TaskCount)" Class="mt-1" Rounded="true" Size="Size.Medium" />
+            </div>
+            <div class="summary-item" data-testid="project-days">
+                @if (p.TargetDate is { } target && !p.StatusIsClosed)
+                {
+                    var days = target.DayNumber - today.DayNumber;
+                    <span class="summary-value @(days < 0 ? "overdue" : null)">@(days < 0
+                        ? Plural(-days, "{0} day overdue", "{0} days overdue", "{0} deň po termíne", "{0} dni po termíne", "{0} dní po termíne")
+                        : days == 0 ? T("Due today") : Plural(days, "{0} day left", "{0} days left", "zostáva {0} deň", "zostávajú {0} dni", "zostáva {0} dní"))</span>
+                }
+                else
+                {
+                    <span class="summary-value">@(p.StatusIsClosed ? T("Closed") : Fmt.Empty)</span>
+                }
+                <span class="summary-label">@T("until the target date")</span>
+            </div>
+            <div class="summary-item"><span class="summary-value">@Fmt.Money(p.EstimatedValue)</span><span class="summary-label">@T("estimated value")</span></div>
+        </div>
+    </MudPaper>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" @bind-ActivePanelIndex="_activeTab">
+        <MudTabPanel Text="@T("Overview")" data-testid="tab-overview">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <dl class="detail-list">
+                        <dt>@T("Customer")</dt><dd><MudLink Href="@($"/customers/{p.CustomerId}")">@p.CustomerName</MudLink></dd>
+                        <dt>@T("Status")</dt><dd><ProjectStatusChip Name="@p.StatusName" Color="@p.StatusColor" /></dd>
+                        <dt>@T("Priority")</dt><dd><PriorityChip Priority="p.Priority" /></dd>
+                        <dt>@T("Responsible")</dt><dd><UserName Name="@p.ResponsibleName" IsActive="p.ResponsibleIsActive" /></dd>
+                        <dt>@T("Start date")</dt><dd>@Fmt.Date(p.StartDate)</dd>
+                        <dt>@T("Target date")</dt>
+                        <dd>
+                            <span class="@(p.IsOverdue(today) ? "overdue" : null)">@Fmt.Date(p.TargetDate)</span>
+                            @if (p.IsOverdue(today))
+                            {
+                                <span class="overdue"> @T("(overdue)")</span>
+                            }
+                        </dd>
+                    </dl>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <dl class="detail-list">
+                        <dt>@T("Estimated value")</dt><dd data-testid="project-estimated-value">@Fmt.Money(p.EstimatedValue)</dd>
+                        <dt>@T("Actual value")</dt><dd>@Fmt.Money(p.ActualValue)</dd>
+                        <dt>@T("Tasks")</dt><dd>@T("{0} open / {1} total", p.OpenTaskCount, p.TaskCount)</dd>
+                        <dt>@T("Created")</dt><dd>@Fmt.DateTimeText(p.CreatedAt)</dd>
+                        <dt>@T("Last updated")</dt><dd>@Fmt.DateTimeText(p.UpdatedAt)</dd>
+                    </dl>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">@T("Description")</MudText>
+                    <MudText Typo="Typo.body2" Class="pre-wrap text-break">@Fmt.OrDash(p.Description)</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">@T("Notes")</MudText>
+                    <MudText Typo="Typo.body2" Class="pre-wrap text-break">@Fmt.OrDash(p.Notes)</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="@T("Tasks ({0} open)", p.OpenTaskCount)" data-testid="tab-tasks">
+            <ProjectTasksPanel @key="_panelVersion" ProjectId="p.Id" OnChanged="RefreshAsync" />
+        </MudTabPanel>
+
+        <MudTabPanel Text="@T("Activities")" data-testid="tab-activities">
+            <ActivityFeed @key="_panelVersion" ProjectId="p.Id" CustomerId="p.CustomerId" OnChanged="RefreshAsync" />
+        </MudTabPanel>
+
+        <MudTabPanel Text="@T("Timeline")" data-testid="tab-timeline">
+            @if (_timeline is null)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+            else
+            {
+                <div data-testid="timeline">
+                    @foreach (var item in _timeline)
+                    {
+                        <div class="timeline-item d-flex gap-2" data-testid="timeline-item">
+                            <MudIcon Icon="@TimelineIcon(item)" Color="Color.Primary" Size="Size.Small" Class="mt-1" />
+                            <div style="min-width: 0;">
+                                <MudText Typo="Typo.subtitle2" Class="text-break">@Generated(item.Title)</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @Fmt.DateTimeText(item.At)@(item.AuthorName is null ? "" : " · " + item.AuthorName)
+                                </MudText>
+                                @if (item.Detail is not null && item.Kind != TimelineKind.ProjectCreated)
+                                {
+                                    <MudText Typo="Typo.body2" Class="pre-wrap text-break">@Generated(item.Detail)</MudText>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private ProjectDetail? _project;
+    private IReadOnlyList<ProjectStatusDto> _statuses = [];
+    private IReadOnlyList<TimelineItem>? _timeline;
+    private List<BreadcrumbItem> _breadcrumbs = [];
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _loadError;
+    private bool _busy;
+    private int _activeTab;
+    private int _panelVersion;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _activeTab = 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _loadError = false;
+        try
+        {
+            _statuses = await StatusService.ListAsync();
+            await RefreshAsync();
+        }
+        catch (NotFoundException)
+        {
+            _project = null;
+            _notFound = true;
+            UpdateBreadcrumbs();
+        }
+        catch (Exception ex) when (ex is not SessionExpiredException)
+        {
+            Logger.LogError(ex, "Loading project {Id} failed", Id);
+            _loadError = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>Reloads header data and the timeline (after status/task/activity changes).</summary>
+    private async Task RefreshAsync()
+    {
+        _project = await ProjectService.GetAsync(Id);
+        _timeline = await ProjectService.GetTimelineAsync(Id);
+        UpdateBreadcrumbs();
+    }
+
+    private void UpdateBreadcrumbs() => _breadcrumbs =
+    [
+        new BreadcrumbItem(T("Projects"), href: ListLocations.For("/projects")),
+        new BreadcrumbItem(_project?.Name ?? $"#{Id}", href: null, disabled: true),
+    ];
+
+    private static string TimelineIcon(TimelineItem item) => item.Kind switch
+    {
+        TimelineKind.ProjectCreated => Icons.Material.Filled.Flag,
+        TimelineKind.TaskCompleted => Icons.Material.Filled.TaskAlt,
+        _ => Labels.ActivityIcon(item.ActivityType ?? ActivityType.Note),
+    };
+
+    private async Task ChangeStatusAsync(int statusId)
+    {
+        if (_project is null || statusId == _project.StatusId || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await ProjectService.ChangeStatusAsync(_project.Id, statusId);
+            await RefreshAsync();
+            Snackbar.Add($"Status changed to {_project.StatusName}.", Severity.Success);
+        }
+        catch (SessionExpiredException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Changing project status failed");
+            Snackbar.Add("The status could not be changed. Please try again.", Severity.Error);
+            await RefreshAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddTaskAsync()
+    {
+        var parameters = new DialogParameters<TaskEditDialog> { { x => x.ProjectId, Id }, { x => x.LockProject, true } };
+        var dialog = await DialogService.ShowAsync<TaskEditDialog>("New task", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            _panelVersion++; // re-create the panels so they reload
+            await RefreshAsync();
+        }
+    }
+
+    private async Task LogActivityAsync()
+    {
+        var parameters = new DialogParameters<ActivityEditDialog>
+        {
+            { x => x.ProjectId, Id },
+            { x => x.CustomerId, _project?.CustomerId },
+            { x => x.LockContext, true },
+        };
+        var dialog = await DialogService.ShowAsync<ActivityEditDialog>("New activity", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            _panelVersion++;
+            await RefreshAsync();
+        }
+    }
+
+    private async Task EditAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<ProjectEditDialog>
+        {
+            { x => x.ProjectId, _project.Id },
+            { x => x.Initial, ProjectInput.From(_project) },
+            { x => x.ActivityCount, _project.ActivityCount },
+        };
+        var dialog = await DialogService.ShowAsync<ProjectEditDialog>("Edit project", parameters, DialogExtensions.FormOptions());
+        if (await dialog.Result is { Canceled: false })
+        {
+            await RefreshAsync();
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_project is not null
+            && await ProjectActions.DeleteAsync(_project.Id, _project.Name, ProjectService, DialogService, Snackbar, Logger))
+        {
+            Navigation.NavigateTo("/projects");
+        }
+    }
+}
