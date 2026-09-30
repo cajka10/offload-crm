@@ -102,7 +102,8 @@
                             @if (_isAdmin)
                             {
                             <td class="col-actions">
-                                @if (!s.IsDefault && !s.IsClosed)
+                                @* BUG-020/BUG-030: only an active (so non-closed) status can be the default. *@
+                                @if (!s.IsDefault && s.IsActive && !s.IsClosed)
                                 {
                                     <MudTooltip Text="@T("Set as default")">
                                         <MudIconButton Icon="@Icons.Material.Filled.Star" Size="Size.Small" aria-label="@T("Set as default")" Disabled="_busy"

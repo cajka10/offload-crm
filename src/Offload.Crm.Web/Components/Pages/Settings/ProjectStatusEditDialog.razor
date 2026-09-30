@@ -34,6 +34,7 @@
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudCheckBox T="bool" @bind-Value="_model.IsActive" Label="@T("Counts as active")" Color="Color.Primary" data-testid="status-active" />
+                    <ValidationMessage For="@(() => _model.IsActive)" class="mud-input-helper-text mud-input-error" />
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudCheckBox T="bool" @bind-Value="_model.IsClosed" Label="@T("Closed (terminal)")" Color="Color.Primary" data-testid="status-closed" />

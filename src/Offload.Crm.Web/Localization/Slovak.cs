@@ -171,6 +171,7 @@ internal static partial class Slovak
         ["Toggle navigation"] = "Prepnúť navigáciu",
         ["Account"] = "Účet",
         ["Language"] = "Jazyk",
+        ["Help"] = "Pomocník",
         ["Change password"] = "Zmeniť heslo",
         ["Logout"] = "Odhlásiť",
         ["TEST DATABASE"] = "TESTOVACIA DATABÁZA",
@@ -555,6 +556,7 @@ internal static partial class Slovak
         ["A status with this name already exists."] = "Stav s týmto názvom už existuje.",
         ["A status can't be both active and closed."] = "Stav nemôže byť zároveň aktívny aj uzavretý.",
         ["The default status must be an open (non-closed) status."] = "Predvolený stav musí byť otvorený (neuzavretý).",
+        ["The default status must be an active status."] = "Predvolený stav musí byť aktívny.",
         ["Set another status as the default instead."] = "Namiesto toho nastavte ako predvolený iný stav.",
         ["\"{0}\" is the default status and can't be deleted. Set another default first."] =
             "„{0}“ je predvolený stav a nie je možné ho vymazať. Najprv nastavte iný predvolený stav.",

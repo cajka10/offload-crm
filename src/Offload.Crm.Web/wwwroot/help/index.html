@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Help · Offload CRM</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="stylesheet" href="help.css" />
+</head>
+
+<body>
+    <header class="topbar">
+        <span class="logo" aria-hidden="true">?</span>
+        <h1>Offload CRM · Help</h1>
+        <span class="spacer"></span>
+        <a class="back" href="/">← Back to the app</a>
+    </header>
+
+    <div class="layout">
+        <nav class="toc" aria-label="Help contents">
+            <h2>Contents</h2>
+            <a href="#start">Getting started</a>
+            <a href="#layout">The screen</a>
+            <a href="#dashboard">Dashboard</a>
+            <a href="#customers">Customers &amp; contacts</a>
+            <a href="#projects">Projects</a>
+            <a href="#tasks">Tasks</a>
+            <a href="#activities">Activities</a>
+            <a href="#lists">Search, filter, sort</a>
+            <a href="#forms">Forms &amp; dialogs</a>
+            <a href="#account">Your account</a>
+            <a href="#settings">Settings (admin)</a>
+            <a href="#glossary">Glossary</a>
+        </nav>
+
+        <main>
+            <div class="hero">
+                <h2>How to use Offload CRM</h2>
+                <p>Offload CRM keeps your customers, their contacts, projects, tasks and every call, e-mail and meeting in one
+                    place. This guide walks you through each screen. Use the contents on the left to jump to a topic.</p>
+            </div>
+
+            <!-- ============ Getting started ============ -->
+            <section class="topic" id="start">
+                <h2><span class="ico">🔑</span>Getting started</h2>
+                <div class="two-col">
+                    <div>
+                        <ol class="steps">
+                            <li>Open the app in your browser. You land on the <b>Sign in</b> page.</li>
+                            <li>Enter your <b>e-mail</b> and <b>password</b> (your administrator gives you both).</li>
+                            <li>Click <span class="ui primary">Sign in</span>. The <b>Dashboard</b> opens.</li>
+                            <li>On your first sign-in, change your password: account icon → <b>Change password</b>.</li>
+                        </ol>
+                        <div class="warn"><strong>Locked out?</strong> After several wrong passwords the account is locked
+                            for a short time. Wait a few minutes, or ask an administrator to reset your password.</div>
+                    </div>
+                    <div>
+                        <div class="mock" aria-hidden="true">
+                            <div class="m-login">
+                                <div class="m-dialog">
+                                    <h4>Sign in to Offload CRM</h4>
+                                    <div class="m-field">E-mail</div>
+                                    <div class="m-field">Password</div>
+                                    <div class="m-primary-btn">SIGN IN</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mock-caption">The sign-in page</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============ Layout ============ -->
+            <section class="topic" id="layout">
+                <h2><span class="ico">🧭</span>The screen</h2>
+                <p>Every page shares the same frame: a green bar at the top, the menu on the left and the content on the right.</p>
+
+                <div class="mock" aria-hidden="true">
+                    <div class="m-appbar">
+                        <span class="pin">1</span><span>☰</span>
+                        <span class="m-title">⬡ Offload CRM</span>
+                        <span class="chip test-db">TEST DATABASE</span><span class="pin">2</span>
+                        <span class="m-spacer"></span>
+                        <span class="m-round">?</span><span class="pin">3</span>
+                        <span>👤 Jana Nováková</span><span class="pin">4</span>
+                        <span>文 EN ▾</span><span class="pin">5</span>
+                        <span class="m-btn">⎋ LOGOUT</span><span class="pin">6</span>
+                    </div>
+                    <div class="m-body">
+                        <div class="m-drawer">
+                            <div class="sel">▦ Dashboard</div>
+                            <div>🏢 Customers</div>
+                            <div>💼 Projects</div>
+                            <div>✔ Tasks</div>
+                            <div>🗒 Activities</div>
+                            <hr />
+                            <div>⚙ Settings</div>
+                        </div>
+                        <div class="m-content">
+                            <div class="m-h"><span class="pin">7</span> Page content</div>
+                            <p style="color:var(--text-muted);margin:0">Lists, detail pages and dashboards appear here.</p>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Main layout</p>
+
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>Menu button</b> — shows or hides the left menu (useful on tablets and small screens).</span></li>
+                    <li><span class="pin">2</span><span><b>TEST DATABASE</b> badge — visible only while the app works with the test data. Anything you do there does not touch real data.</span></li>
+                    <li><span class="pin">3</span><span><b>Help</b> — opens this guide in a new tab.</span></li>
+                    <li><span class="pin">4</span><span><b>Account</b> — your name; the account icon opens <b>Change password</b>.</span></li>
+                    <li><span class="pin">5</span><span><b>Language</b> — switch between English and Slovak.</span></li>
+                    <li><span class="pin">6</span><span><b>Logout</b> — signs you out. Always log out on a shared computer.</span></li>
+                    <li><span class="pin">7</span><span><b>Content</b> — the page you picked in the menu.</span></li>
+                </ul>
+            </section>
+
+            <!-- ============ Dashboard ============ -->
+            <section class="topic" id="dashboard">
+                <h2><span class="ico">📊</span>Dashboard</h2>
+                <p>The dashboard is your starting point. It shows the key numbers and what needs your attention.</p>
+
+                <div class="mock" aria-hidden="true">
+                    <div class="m-body no-drawer">
+                        <div class="m-content">
+                            <div class="m-h">Dashboard</div>
+                            <div class="m-kpis">
+                                <div class="m-kpi"><b>24</b><span>Active customers</span></div>
+                                <div class="m-kpi"><b>11</b><span>Active projects</span></div>
+                                <div class="m-kpi"><b>37</b><span>Open tasks</span></div>
+                                <div class="m-kpi alert"><b>3</b><span>Overdue tasks</span></div>
+                                <div class="m-kpi"><b>84 500 €</b><span>Pipeline value</span></div>
+                            </div>
+                            <div class="m-cards">
+                                <div class="m-card">
+                                    <h4>My open tasks <span class="pin">2</span></h4>
+                                    <div class="row"><span>Send offer</span><span class="chip p-high">High</span></div>
+                                    <div class="row"><span>Call back IT dept.</span><span class="chip p-medium">Medium</span></div>
+                                </div>
+                                <div class="m-card">
+                                    <h4>Upcoming deadlines <span class="pin">3</span></h4>
+                                    <div class="row"><span>Warehouse app</span><span>02.10.2026</span></div>
+                                    <div class="row"><span>Web redesign</span><span>09.10.2026</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Dashboard with KPI cards <span class="pin">1</span> and widgets</p>
+
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>KPI cards</b> — click any card to open the matching, already filtered list (e.g. <i>Overdue tasks</i> opens Tasks filtered to overdue).</span></li>
+                    <li><span class="pin">2</span><span><b>My open tasks</b> — tasks assigned to you that are not Done.</span></li>
+                    <li><span class="pin">3</span><span><b>Upcoming deadlines</b> — project target dates and task due dates in the next 14 days. The dashboard also shows <b>Projects by status</b>, <b>Recent activities</b> and <b>Recently updated</b> items.</span></li>
+                </ul>
+            </section>
+
+            <!-- ============ Customers ============ -->
+            <section class="topic" id="customers">
+                <h2><span class="ico">🏢</span>Customers &amp; contacts</h2>
+                <p>A <b>customer</b> is a company. Each customer can have any number of <b>contacts</b> (people),
+                    <b>projects</b> and <b>activities</b>.</p>
+
+                <div class="mock" aria-hidden="true">
+                    <div class="m-body no-drawer">
+                        <div class="m-content">
+                            <div class="m-h">Customers <span class="m-spacer"></span><span class="m-primary-btn">+ NEW CUSTOMER</span><span class="pin">1</span></div>
+                            <div class="m-toolbar">
+                                <span class="m-input">🔍 Search name, IČO, VAT, e-mail or contact…</span><span class="pin">2</span>
+                                <span class="m-select">All statuses ▾</span><span class="pin">3</span>
+                            </div>
+                            <div class="m-table-wrap">
+                                <table class="m-table">
+                                    <tr><th>Company ▲</th><th>IČO</th><th>City</th><th>Status</th><th>Projects</th><th></th></tr>
+                                    <tr><td class="link">Česká logistika a.s. <span class="pin">4</span></td><td>12345678</td><td>Praha</td><td><span class="chip active">Active</span></td><td>3</td><td>✎ 🗑</td></tr>
+                                    <tr><td class="link">Moravské vinařství Šťastný</td><td>87654321</td><td>Brno</td><td><span class="chip lead">Lead</span></td><td>1</td><td>✎ 🗑 <span class="pin">5</span></td></tr>
+                                    <tr><td class="link">Nová Pekárna Kolín</td><td>11223344</td><td>Kolín</td><td><span class="chip inactive">Inactive</span></td><td>0</td><td>✎ 🗑</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Customers list</p>
+
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>New customer</b> — opens a form. Only <b>Company name</b> is required.</span></li>
+                    <li><span class="pin">2</span><span><b>Search</b> — by company name, IČO, VAT ID (DIČ), e-mail or a contact's name.</span></li>
+                    <li><span class="pin">3</span><span><b>Status filter</b> — <span class="chip lead">Lead</span> (potential customer), <span class="chip active">Active</span> or <span class="chip inactive">Inactive</span>.</span></li>
+                    <li><span class="pin">4</span><span><b>Company name</b> — click it to open the customer's detail page.</span></li>
+                    <li><span class="pin">5</span><span><b>Edit / Delete</b> — row actions. A customer that still has projects can't be deleted; delete or move its projects first.</span></li>
+                </ul>
+
+                <h3>Customer detail page</h3>
+                <div class="mock" aria-hidden="true">
+                    <div class="m-body no-drawer">
+                        <div class="m-content">
+                            <div class="m-h">Česká logistika a.s. <span class="chip active">Active</span><span class="m-spacer"></span><span class="m-outline-btn">🗒 LOG ACTIVITY</span><span class="pin">1</span><span class="m-outline-btn">✎ EDIT</span></div>
+                            <div class="m-tabs"><div>Overview</div><div class="sel">Contacts (2)</div><div>Projects (3)</div><div>Activities</div><span class="pin">2</span></div>
+                            <div class="m-h" style="font-size:13px"><span class="m-spacer"></span><span class="m-primary-btn">+ ADD CONTACT</span><span class="pin">3</span></div>
+                            <table class="m-table">
+                                <tr><th>Name</th><th>Position</th><th>E-mail</th><th>Phone</th></tr>
+                                <tr><td>Jan Horák</td><td>CEO</td><td class="link">horak@logistika.cz</td><td>+420 601 234 567</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Customer detail with tabs</p>
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>Log activity</b> — quickly record a call, e-mail or meeting with this customer.</span></li>
+                    <li><span class="pin">2</span><span><b>Tabs</b> — <i>Overview</i> (address, IDs, notes), <i>Contacts</i>, <i>Projects</i> and <i>Activities</i>.</span></li>
+                    <li><span class="pin">3</span><span><b>Add contact</b> — adds a person to this customer. Only <b>Last name</b> is required.</span></li>
+                </ul>
+                <div class="tip"><strong>Tip:</strong> A <b>Registration no. (IČO)</b> must be unique. If you get a duplicate
+                    error, the company already exists; search for it instead of creating it again.</div>
+            </section>
+
+            <!-- ============ Projects ============ -->
+            <section class="topic" id="projects">
+                <h2><span class="ico">💼</span>Projects</h2>
+                <p>A <b>project</b> always belongs to one customer. It has a <b>status</b> (e.g. Lead → In progress → Delivered),
+                    a <b>priority</b>, a <b>responsible</b> person, dates and an estimated value.</p>
+
+                <div class="mock" aria-hidden="true">
+                    <div class="m-body no-drawer">
+                        <div class="m-content">
+                            <div class="m-h">Projects <span class="m-spacer"></span><span class="m-primary-btn">+ NEW PROJECT</span></div>
+                            <div class="m-toolbar">
+                                <span class="m-input">🔍 Search project or customer…</span>
+                                <span class="m-select">Status ▾</span>
+                                <span class="m-select">All priorities ▾</span>
+                                <span class="m-select">☑ Active only</span><span class="pin">1</span>
+                            </div>
+                            <div class="m-table-wrap">
+                                <table class="m-table">
+                                    <tr><th>Name</th><th>Customer</th><th>Status</th><th>Priority</th><th>Target</th><th>Est. value</th></tr>
+                                    <tr><td class="link">Warehouse app</td><td>Česká logistika a.s.</td><td><span class="chip" style="background:#0D6EFD;color:#fff">In progress</span></td><td><span class="chip p-critical">Critical</span></td><td style="color:var(--danger)">25.09.2026 (overdue)</td><td>32 000,00 €</td></tr>
+                                    <tr><td class="link">Web redesign</td><td>Moravské vinařství</td><td><span class="chip" style="background:#6C757D;color:#fff">Lead</span></td><td><span class="chip p-low">Low</span></td><td>09.10.2026</td><td>4 500,00 €</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Projects list</p>
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>Active only</b> — hides projects in inactive or closed statuses (e.g. Delivered, Cancelled). Untick it to see everything.</span></li>
+                </ul>
+
+                <h3>Project detail page</h3>
+                <div class="mock" aria-hidden="true">
+                    <div class="m-body no-drawer">
+                        <div class="m-content">
+                            <div class="m-h">Warehouse app <span class="m-spacer"></span><span class="m-select">Status: In progress ▾</span><span class="pin">1</span><span class="m-outline-btn">🗒 LOG ACTIVITY</span></div>
+                            <div class="m-tabs"><div>Overview</div><div class="sel">Tasks (2 open)</div><div>Activities</div><div>Timeline</div><span class="pin">2</span></div>
+                            <div class="m-toolbar"><span class="m-input">Add a task and press Enter…</span><span class="pin">3</span></div>
+                            <table class="m-table">
+                                <tr><td>☐ Prepare data migration</td><td><span class="chip t-progress">In progress</span></td><td>Petr Dvořák</td></tr>
+                                <tr><td>☐ Test with pilot users</td><td><span class="chip t-todo">To do</span></td><td>Unassigned</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Project detail</p>
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>Status</b> — change it right here. Every change is recorded on the <i>Timeline</i> automatically.</span></li>
+                    <li><span class="pin">2</span><span><b>Tabs</b> — <i>Overview</i>, <i>Tasks</i>, <i>Activities</i> and <i>Timeline</i> (the full history of the project).</span></li>
+                    <li><span class="pin">3</span><span><b>Quick add</b> — type a task title and press <kbd>Enter</kbd>. Add details later with Edit.</span></li>
+                </ul>
+                <div class="note"><strong>Archiving:</strong> there's no separate archive. To close a project, move it to a
+                    closed status such as <i>Delivered</i> or <i>Cancelled</i>. Deleting a project also deletes its tasks,
+                    but its activities stay with the customer.</div>
+            </section>
+
+            <!-- ============ Tasks ============ -->
+            <section class="topic" id="tasks">
+                <h2><span class="ico">✔️</span>Tasks</h2>
+                <p>Tasks are the to-dos inside projects. Each task has a status, a priority, an optional assignee and a due date.
+                    The <b>Tasks</b> page shows tasks from all projects, either as a <b>List</b> or as a <b>Kanban</b> board.</p>
+
+                <div class="mock" aria-hidden="true">
+                    <div class="m-body no-drawer">
+                        <div class="m-content">
+                            <div class="m-h">Tasks <span class="m-select">List | <b style="color:var(--primary)">Kanban</b></span><span class="pin">1</span><span class="m-spacer"></span><span class="m-primary-btn">+ NEW TASK</span></div>
+                            <div class="m-toolbar">
+                                <span class="m-input">🔍 Search tasks…</span>
+                                <span class="m-select">Assignee: Me ▾</span><span class="pin">2</span>
+                                <span class="m-select">☐ Overdue only</span>
+                            </div>
+                            <div class="m-kanban">
+                                <div class="m-col"><b>TO DO · 2</b>
+                                    <div class="m-task">Test with pilot users<small>Warehouse app</small></div>
+                                    <div class="m-task">Send offer <span class="chip p-high">High</span><small style="color:var(--danger)">Due 28.09. (overdue)</small></div>
+                                </div>
+                                <div class="m-col"><b>IN PROGRESS · 1</b>
+                                    <div class="m-task">Prepare data migration ⋮ <span class="pin">3</span><small>Warehouse app</small></div>
+                                </div>
+                                <div class="m-col"><b>BLOCKED · 0</b></div>
+                                <div class="m-col"><b>DONE · 1</b>
+                                    <div class="m-task" style="opacity:.7"><s>Kick-off meeting</s><small>Warehouse app</small></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Tasks as a Kanban board</p>
+                <ul class="legend">
+                    <li><span class="pin">1</span><span><b>List / Kanban</b> — switch the view. Your choice is kept in the page address.</span></li>
+                    <li><span class="pin">2</span><span><b>Assignee</b> — <i>Me</i>, <i>Unassigned</i> or a specific colleague. Combine it with status, priority, project and <i>Overdue only</i>.</span></li>
+                    <li><span class="pin">3</span><span><b>Card menu ⋮</b> — change the task's status. The card moves to the matching column.</span></li>
+                </ul>
+                <table class="ref">
+                    <tr><th>Status</th><th>Meaning</th></tr>
+                    <tr><td><span class="chip t-todo">To do</span></td><td>Not started yet.</td></tr>
+                    <tr><td><span class="chip t-progress">In progress</span></td><td>Someone is working on it.</td></tr>
+                    <tr><td><span class="chip t-blocked">Blocked</span></td><td>Waiting for something (customer, another task…).</td></tr>
+                    <tr><td><span class="chip t-done">Done</span></td><td>Finished. Done tasks are never overdue.</td></tr>
+                </table>
+            </section>
+
+            <!-- ============ Activities ============ -->
+            <section class="topic" id="activities">
+                <h2><span class="ico">🗒️</span>Activities</h2>
+                <p>An <b>activity</b> is a record of communication: a <b>phone call</b>, <b>e-mail</b>, <b>meeting</b>, <b>note</b>
+                    or <b>other</b>. Link it to a customer and, optionally, to one of the customer's projects.</p>
+                <ol class="steps">
+                    <li>Click <span class="ui primary">+ New activity</span> on the Activities page, or <span class="ui">Log activity</span> on a customer or project.</li>
+                    <li>Choose the <b>type</b>, the <b>customer</b> (and project), the <b>date and time</b>.</li>
+                    <li>Write a short <b>subject</b> (optional) and the <b>description</b>, then <span class="ui primary">Save</span>.</li>
+                </ol>
+
+                <div class="mock" aria-hidden="true">
+                    <div class="m-dialog-wrap">
+                        <div class="m-dialog">
+                            <h4>New activity</h4>
+                            <div class="m-field">Type: Phone call ▾</div>
+                            <div class="m-field">Customer: Česká logistika a.s.</div>
+                            <div class="m-field">Project: Warehouse app (optional)</div>
+                            <div class="m-field">📅 30.09.2026 &nbsp; 🕑 14:30</div>
+                            <div class="m-field">Description: Agreed on the pilot scope…</div>
+                            <div class="m-actions"><span class="m-outline-btn">CANCEL</span><span class="m-primary-btn">SAVE</span></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mock-caption">Logging an activity</p>
+                <div class="tip"><strong>Tip:</strong> Filter the Activities list by type, customer, project, author and a date
+                    range to answer questions like "what did we discuss with this customer last month?".</div>
+            </section>
+
+            <!-- ============ Lists ============ -->
+            <section class="topic" id="lists">
+                <h2><span class="ico">🔍</span>Search, filter and sort</h2>
+                <p>All lists (customers, projects, tasks, activities, users) work the same way:</p>
+                <table class="ref">
+                    <tr><th>Action</th><th>How</th></tr>
+                    <tr><td>Search</td><td>Type into the search box. It ignores upper/lower case and searches as you type.</td></tr>
+                    <tr><td>Filter</td><td>Use the drop-downs and checkboxes next to the search box.</td></tr>
+                    <tr><td>Sort</td><td>Click a column header. Click again to reverse the order (▲ / ▼).</td></tr>
+                    <tr><td>Page</td><td>Use the pager under the list and pick how many rows to show per page.</td></tr>
+                    <tr><td>Share a view</td><td>Search, filters, sort and page are kept in the page address. Bookmark it, or send the link to a colleague.</td></tr>
+                </table>
+                <div class="note"><strong>Formats:</strong> dates are shown as <b>dd.MM.yyyy</b>, amounts as <b>1 250,50 €</b>,
+                    and times in the Europe/Bratislava time zone.</div>
+            </section>
+
+            <!-- ============ Forms ============ -->
+            <section class="topic" id="forms">
+                <h2><span class="ico">📝</span>Forms and dialogs</h2>
+                <div class="two-col">
+                    <div>
+                        <ul>
+                            <li>New and Edit open in a <b>dialog</b> over the page.</li>
+                            <li>Required fields are marked. If something is wrong, the field turns <b style="color:var(--danger)">red</b> with an explanation, and nothing is saved.</li>
+                            <li>Press <kbd>Esc</kbd> or click <span class="ui">Cancel</span> to close without saving.</li>
+                            <li>Deleting always asks for confirmation first.</li>
+                            <li>Websites: <i>https://</i> is added automatically when missing.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div class="mock" aria-hidden="true">
+                            <div class="m-dialog-wrap">
+                                <div class="m-dialog">
+                                    <h4>New customer</h4>
+                                    <div class="m-field error">Company name *</div>
+                                    <div style="color:var(--danger);font-size:11px;margin:-6px 0 8px">Company name is required.</div>
+                                    <div class="m-field">E-mail</div>
+                                    <div class="m-actions"><span class="m-outline-btn">CANCEL</span><span class="m-primary-btn">SAVE</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mock-caption">A validation error</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============ Account ============ -->
+            <section class="topic" id="account">
+                <h2><span class="ico">👤</span>Your account</h2>
+                <h3>Change password</h3>
+                <ol class="steps">
+                    <li>Click the <b>account icon</b> in the top bar → <b>Change password</b>.</li>
+                    <li>Enter your current password and the new one twice. The new password needs <b>at least 8 characters, a digit and an uppercase letter</b>.</li>
+                    <li>Save. You stay signed in here; your other sessions (other browsers and devices) are signed out.</li>
+                </ol>
+                <h3>Language</h3>
+                <p>Click the language button (<b>EN</b> / <b>SK</b>) next to your name and pick a language. The page reloads in that language.</p>
+            </section>
+
+            <!-- ============ Settings ============ -->
+            <section class="topic" id="settings">
+                <h2><span class="ico">⚙️</span>Settings</h2>
+                <p>Everyone can open <b>Settings</b>, but most changes are for <b>administrators</b>.</p>
+                <table class="ref">
+                    <tr><th>Tab</th><th>What it does</th><th>Who</th></tr>
+                    <tr><td>Project statuses</td><td>Add, rename, recolor and reorder statuses (<i>Move up / Move down</i>). Mark a status as <i>Counts as active</i> or <i>Closed</i>, and pick the ☆ <b>default</b> status for new projects. The default must be active and not closed. A status used by projects can't be deleted.</td><td>Admin edits, everyone sees</td></tr>
+                    <tr><td>General</td><td>Version, environment, culture, currency and time zone.</td><td>Everyone</td></tr>
+                    <tr><td>Database</td><td>Switch the whole app between the <b>Production</b> and the <b>Test</b> database. All users are switched and all open tabs reload.</td><td>Admin</td></tr>
+                    <tr><td>Users</td><td>Create users, edit names and roles, reset passwords, <b>deactivate</b> / reactivate users. Users are never deleted; a deactivated user can't sign in, and open sessions end within about a minute.</td><td>Admin</td></tr>
+                </table>
+                <div class="warn"><strong>Database switch:</strong> while the orange <span class="chip test-db">TEST DATABASE</span> badge
+                    is shown, you are working with test data. Switch back to <b>Production</b> before doing real work.</div>
+
+                <h3>Roles</h3>
+                <div class="two-col">
+                    <div class="tip" style="margin:0"><strong>User</strong><br />Works with customers, contacts, projects, tasks and activities, and can change their own password and language.</div>
+                    <div class="note" style="margin:0"><strong>Administrator</strong><br />Everything a User can do, plus users, project statuses and the database switch.</div>
+                </div>
+            </section>
+
+            <!-- ============ Glossary ============ -->
+            <section class="topic" id="glossary">
+                <h2><span class="ico">📖</span>Glossary</h2>
+                <table class="ref">
+                    <tr><td><b>Active customer</b></td><td>A customer with status <span class="chip active">Active</span>.</td></tr>
+                    <tr><td><b>Active project</b></td><td>A project whose status is marked <i>Counts as active</i>.</td></tr>
+                    <tr><td><b>Open task</b></td><td>Any task that is not <span class="chip t-done">Done</span>.</td></tr>
+                    <tr><td><b>Overdue</b></td><td>The due or target date is before today and the task is not Done (or the project is not closed). Shown in red.</td></tr>
+                    <tr><td><b>Pipeline value</b></td><td>The sum of the estimated values of all active projects.</td></tr>
+                    <tr><td><b>Priority</b></td><td><span class="chip p-critical">Critical</span> <span class="chip p-high">High</span> <span class="chip p-medium">Medium</span> <span class="chip p-low">Low</span></td></tr>
+                    <tr><td><b>IČO / DIČ</b></td><td>Company registration number / VAT ID.</td></tr>
+                </table>
+            </section>
+
+            <footer>Offload CRM · Need more help? Contact your administrator.</footer>
+        </main>
+    </div>
+</body>
+
+</html>

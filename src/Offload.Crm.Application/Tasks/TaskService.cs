@@ -161,9 +161,9 @@ public sealed class TaskService(IAppDbContextFactory dbFactory, ICurrentUser cur
             tasks = tasks.Where(t => t.Priority == priority);
         }
 
-        switch (query.Assignee?.Trim())
+        switch (InputText.Clean(query.Assignee))
         {
-            case null or "":
+            case null:
                 break;
             case var a when a.Equals(TaskListQuery.AssigneeUnassigned, StringComparison.OrdinalIgnoreCase):
                 tasks = tasks.Where(t => t.AssignedUserId == null);

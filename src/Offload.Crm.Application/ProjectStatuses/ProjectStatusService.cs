@@ -77,6 +77,7 @@ public sealed class ProjectStatusService(IAppDbContextFactory dbFactory) : IProj
     public const string BothFlagsMessage = "A status can't be both active and closed.";
     public const string DuplicateNameMessage = "A status with this name already exists.";
     public const string ClosedDefaultMessage = "The default status must be an open (non-closed) status.";
+    public const string InactiveDefaultMessage = "The default status must be an active status.";
 
     public async Task<IReadOnlyList<ProjectStatusDto>> ListAsync(CancellationToken ct = default)
     {
@@ -201,6 +202,11 @@ public sealed class ProjectStatusService(IAppDbContextFactory dbFactory) : IProj
             throw new ConflictException(ClosedDefaultMessage);
         }
 
+        if (!status.IsActive)
+        {
+            throw new ConflictException(InactiveDefaultMessage); // BUG-030
+        }
+
         await using var tx = await db.BeginTransactionAsync(ct);
         await UnsetDefaultAsync(db, ct);
         status.IsDefault = true;
@@ -234,6 +240,11 @@ public sealed class ProjectStatusService(IAppDbContextFactory dbFactory) : IProj
         {
             // BUG-020: new projects would start closed and vanish from the default Projects list.
             errors[nameof(ProjectStatusInput.IsClosed)] = [ClosedDefaultMessage];
+        }
+        else if (input.IsDefault && !input.IsActive)
+        {
+            // BUG-030: same as BUG-020 for inactive statuses (also when the current default is edited to inactive).
+            errors[nameof(ProjectStatusInput.IsActive)] = [InactiveDefaultMessage];
         }
 
         if (!errors.ContainsKey(nameof(ProjectStatusInput.Name)) && await IsNameTakenAsync(db, input.Name, currentId, ct))

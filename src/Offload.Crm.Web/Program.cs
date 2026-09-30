@@ -52,6 +52,10 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
         options.User.RequireUniqueEmail = true;
+
+        // BUG-031: the user name is the e-mail, whose format is governed by the app's EmailFormat rule (D-20.8), so
+        // Identity's stricter default character list (no ' or diacritics) must not reject it. Empty = any character.
+        options.User.AllowedUserNameCharacters = string.Empty;
         options.SignIn.RequireConfirmedAccount = false;
         options.Password.RequiredLength = 8;
         options.Password.RequireDigit = true;

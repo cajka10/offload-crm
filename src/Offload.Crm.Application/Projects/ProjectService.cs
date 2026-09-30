@@ -77,9 +77,8 @@ public sealed class ProjectService(IAppDbContextFactory dbFactory, ICurrentUser 
             projects = projects.Where(p => p.Priority == priority);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.ResponsibleUserId))
+        if (InputText.Clean(query.ResponsibleUserId) is { } responsible)
         {
-            var responsible = query.ResponsibleUserId;
             projects = projects.Where(p => p.ResponsibleUserId == responsible);
         }
 
@@ -114,7 +113,7 @@ public sealed class ProjectService(IAppDbContextFactory dbFactory, ICurrentUser 
     public async Task<IReadOnlyList<ProjectLookupItem>> LookupAsync(string? search, int? customerId = null, int take = 20, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateAsync(ct);
-        var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLowerInvariant();
+        var term = InputText.SearchTerm(search);
         return await db.Projects.AsNoTracking()
             .Where(p => customerId == null || p.CustomerId == customerId)
             .Where(p => term == null || p.Name.ToLower().Contains(term) || p.Customer.CompanyName.ToLower().Contains(term))

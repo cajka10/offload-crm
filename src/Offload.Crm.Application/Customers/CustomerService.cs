@@ -79,7 +79,7 @@ public sealed class CustomerService(IAppDbContextFactory dbFactory) : ICustomerS
     public async Task<IReadOnlyList<LookupItem>> LookupAsync(string? search, int take = 20, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateAsync(ct);
-        var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLowerInvariant();
+        var term = InputText.SearchTerm(search);
         return await db.Customers.AsNoTracking()
             .Where(c => term == null || c.CompanyName.ToLower().Contains(term) || (c.RegistrationNo != null && c.RegistrationNo.ToLower().Contains(term)))
             .OrderBy(c => c.CompanyName).ThenBy(c => c.Id)

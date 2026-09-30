@@ -61,8 +61,22 @@ public sealed class EnumDefinedAttribute : ValidationAttribute
 
 public static class InputText
 {
-    /// <summary>Trims the value; empty/whitespace becomes null (D-12).</summary>
-    public static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    /// <summary>
+    /// Removes NUL characters (PostgreSQL <c>text</c> can't store them, BUG-028), trims the value; empty/whitespace
+    /// becomes null (D-12).
+    /// </summary>
+    public static string? Clean(string? value)
+    {
+        var stripped = StripNul(value);
+        return string.IsNullOrWhiteSpace(stripped) ? null : stripped.Trim();
+    }
+
+    /// <summary>A search term: cleaned (<see cref="Clean"/>) and lower-cased for case-insensitive contains (D-16).</summary>
+    public static string? SearchTerm(string? value) => Clean(value)?.ToLowerInvariant();
+
+    /// <summary>Removes NUL characters (BUG-028); anything else is kept as is.</summary>
+    public static string? StripNul(string? value) =>
+        value is null || !value.Contains('\0', StringComparison.Ordinal) ? value : value.Replace("\0", string.Empty, StringComparison.Ordinal);
 
     /// <summary>Trims and prepends <c>https://</c> when the scheme is missing (D-12).</summary>
     public static string? CleanUrl(string? value)
@@ -78,7 +92,7 @@ public static class InputText
 }
 
 /// <summary>
-/// E-mail format (D-20.8): exactly one @, no whitespace and none of <c>? < > , ; " ( ) [ ] </c> or <c>:</c>,
+/// E-mail format (D-20.8): exactly one @, no whitespace, no invisible/control characters (BUG-032) and none of <c>? < > , ; " ( ) [ ] </c> or <c>:</c>,
 /// a dot in the domain and a 2+ letter TLD. Prevents mailto: header injection (BUG-012).
 /// </summary>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
@@ -92,8 +106,9 @@ public sealed partial class EmailFormatAttribute : ValidationAttribute
     public override bool IsValid(object? value) =>
         value is not string s || string.IsNullOrWhiteSpace(s) || EmailRegex().IsMatch(s.Trim());
 
-    // Local part: no whitespace, @ or ? < > , ; " ( ) [ ] \ :  (D-20.8, BUG-012). Domain: labels + 2+ letter TLD.
-    [GeneratedRegex(@"^[^@\s?<>,;""()\[\]\\:]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$")]
+    // Local part: no whitespace, @ or ? < > , ; " ( ) [ ] \ :  (D-20.8, BUG-012) and no control/format characters
+    // (\p{C}, e.g. zero-width space U+200B: lookalike logins, BUG-032). Domain: labels + 2+ letter TLD.
+    [GeneratedRegex(@"^[^@\s\p{C}?<>,;""()\[\]\\:]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$")]
     private static partial Regex EmailRegex();
 }
 

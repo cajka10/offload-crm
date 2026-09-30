@@ -26,6 +26,11 @@
             </MudTooltip>
         }
         <MudSpacer />
+        @* User guide: static page in wwwroot/help, opened in a new tab so the current work stays open. *@
+        <MudTooltip Text="@T("Help")">
+            <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Inherit" Href="help/index.html" Target="_blank"
+                           rel="noopener" aria-label="@T("Help")" data-testid="help-button" />
+        </MudTooltip>
         <AuthorizeView>
             <Authorized>
                 <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AriaLabel="@T("Account")" data-testid="user-menu">

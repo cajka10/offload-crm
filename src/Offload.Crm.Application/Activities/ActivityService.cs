@@ -168,9 +168,8 @@ public sealed class ActivityService(IAppDbContextFactory dbFactory, ICurrentUser
             activities = activities.Where(a => a.ProjectId == projectId);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.AuthorId))
+        if (InputText.Clean(query.AuthorId) is { } authorId)
         {
-            var authorId = query.AuthorId;
             activities = activities.Where(a => a.AuthorId == authorId);
         }
 

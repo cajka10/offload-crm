@@ -32,7 +32,7 @@ internal sealed class UserAdminService(
     {
         var me = await AuthorizeAsync();
         await using var db = await dbFactory.CreateAsync(ct);
-        var term = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim().ToLowerInvariant();
+        var term = InputText.SearchTerm(query.Search);
         var users = await db.Users.AsNoTracking()
             .Where(u => query.Active == null || u.IsActive == query.Active)
             .Where(u => term == null || u.FullName.ToLower().Contains(term) || (u.Email != null && u.Email.ToLower().Contains(term)))

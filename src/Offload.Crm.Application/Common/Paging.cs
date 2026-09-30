@@ -30,7 +30,7 @@ public abstract class PagedQuery
         _ => PageSize,
     };
 
-    public string? NormalizedSearch => string.IsNullOrWhiteSpace(Search) ? null : Search.Trim().ToLowerInvariant();
+    public string? NormalizedSearch => InputText.SearchTerm(Search);
 }
 
 public static class PagingExtensions

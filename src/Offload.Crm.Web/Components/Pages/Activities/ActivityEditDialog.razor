@@ -128,6 +128,14 @@
     private void UpdateDate()
     {
         _model.Date = _localDate is null ? null : AppTime.LocalToUtc(_localDate.Value.Date + (_localTime ?? TimeSpan.Zero));
+        if (_model.Date is { } utc && _localTime is not null)
+        {
+            // BUG-029: a time in the DST gap is shifted forward (D-30); show the time that will be saved.
+            var local = Fmt.ToLocal(utc);
+            _localDate = local.Date;
+            _localTime = new TimeSpan(local.Hour, local.Minute, 0);
+        }
+
         _editContext.NotifyFieldChanged(_editContext.Field(nameof(ActivityInput.Date)));
     }
 
